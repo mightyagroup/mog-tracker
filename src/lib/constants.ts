@@ -1,4 +1,4 @@
-import { EntityType, LeadStatus, SetAsideType, SourceType, ContractType } from './types'
+import { EntityType, LeadStatus, SetAsideType, SourceType, ContractType, CommercialStatus } from './types'
 
 export const ENTITY_BRANDING: Record<string, { primary: string; accent: string; name: string }> = {
   mog:       { primary: '#1F2937', accent: '#D4AF37', name: 'MOG Command' },
@@ -74,6 +74,49 @@ export const CONTRACT_TYPE_LABELS: Record<ContractType, string> = {
   purchase_order:'Purchase Order',
   commercial:    'Commercial',
 }
+
+export const COMMERCIAL_STATUSES: CommercialStatus[] = [
+  'prospect', 'outreach', 'proposal', 'negotiation', 'contract', 'lost', 'inactive',
+]
+
+export const COMMERCIAL_STATUS_LABELS: Record<CommercialStatus, string> = {
+  prospect:    'Prospect',
+  outreach:    'Outreach',
+  proposal:    'Proposal',
+  negotiation: 'Negotiation',
+  contract:    'Contract',
+  lost:        'Lost',
+  inactive:    'Inactive',
+}
+
+export const COMMERCIAL_STATUS_COLORS: Record<CommercialStatus, { bg: string; text: string }> = {
+  prospect:    { bg: '#172554', text: '#93C5FD' },
+  outreach:    { bg: '#3b2a1a', text: '#FCD34D' },
+  proposal:    { bg: '#2e1065', text: '#C4B5FD' },
+  negotiation: { bg: '#431407', text: '#FED7AA' },
+  contract:    { bg: '#052e16', text: '#4ADE80' },
+  lost:        { bg: '#3b0a0a', text: '#FCA5A5' },
+  inactive:    { bg: '#111827', text: '#6B7280' },
+}
+
+export const VITALX_COMMERCIAL_CATEGORIES = [
+  'Hospital Systems',
+  'Reference Labs',
+  'Clinical Research/Biotech',
+  'Pharmacy/Specialty',
+  'Home Health',
+  'NEMT Brokers',
+]
+
+export const OUTREACH_METHODS = [
+  'Email',
+  'Phone',
+  'LinkedIn',
+  'In-Person',
+  'Referral',
+  'Conference',
+  'Cold Outreach',
+]
 
 export const DEFAULT_COMPLIANCE_ITEMS = [
   'Download and review full solicitation',

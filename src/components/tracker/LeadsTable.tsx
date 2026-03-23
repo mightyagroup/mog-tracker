@@ -13,11 +13,12 @@ import { DeadlineCountdown } from './DeadlineCountdown'
 import { FitScoreBadge } from './FitScoreBadge'
 import { LeadDetailPanel } from './LeadDetailPanel'
 import { AddLeadModal } from './AddLeadModal'
+import { ImportCSVModal } from './ImportCSVModal'
 import { EmptyState } from '@/components/common/EmptyState'
 import { LoadingPage } from '@/components/common/LoadingSpinner'
 import {
   Plus, Download, Search, SlidersHorizontal, X, ArrowUpDown, ArrowUp, ArrowDown,
-  ChevronDown, FileSearch,
+  ChevronDown, FileSearch, Upload,
 } from 'lucide-react'
 
 interface LeadsTableProps {
@@ -51,6 +52,7 @@ export function LeadsTable({
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [selectedLead, setSelectedLead] = useState<GovLead | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [showImportModal, setShowImportModal] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkStatusOpen, setBulkStatusOpen] = useState(false)
   const bulkRef = useRef<HTMLDivElement>(null)
@@ -220,11 +222,18 @@ export function LeadsTable({
 
         <div className="flex items-center gap-2 ml-auto">
           <button
+            onClick={() => setShowImportModal(true)}
+            className="flex items-center gap-2 px-3 py-2 border border-[#374151] text-gray-400 hover:text-white hover:bg-[#374151] rounded-lg text-sm transition"
+          >
+            <Upload size={14} />
+            Import
+          </button>
+          <button
             onClick={() => exportLeadsToCSV(sortedLeads, categories)}
             className="flex items-center gap-2 px-3 py-2 border border-[#374151] text-gray-400 hover:text-white hover:bg-[#374151] rounded-lg text-sm transition"
           >
             <Download size={14} />
-            CSV
+            Export
           </button>
           <button
             onClick={() => setShowAddModal(true)}
@@ -429,6 +438,16 @@ export function LeadsTable({
           accentColor={accentColor}
           onClose={() => setSelectedLead(null)}
           onUpdate={handleLeadUpdate}
+        />
+      )}
+
+      {/* Import CSV modal */}
+      {showImportModal && (
+        <ImportCSVModal
+          entity={entity}
+          categories={categories}
+          onClose={() => setShowImportModal(false)}
+          onImport={() => { setShowImportModal(false); fetchData() }}
         />
       )}
 

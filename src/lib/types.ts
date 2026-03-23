@@ -100,6 +100,32 @@ export interface GovLead {
   updated_at: string
 }
 
+export interface CommercialLead {
+  id: string
+  entity: EntityType
+  organization_name: string
+  contact_name?: string | null
+  contact_title?: string | null
+  contact_email?: string | null
+  contact_phone?: string | null
+  website?: string | null
+  status: CommercialStatus
+  service_category?: string | null
+  estimated_annual_value?: number | null
+  contract_length_months?: number | null
+  last_contact_date?: string | null
+  next_follow_up?: string | null
+  outreach_method?: string | null
+  contract_start_date?: string | null
+  contract_end_date?: string | null
+  contract_value?: number | null
+  proposal_url?: string | null
+  drive_folder_url?: string | null
+  notes?: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface Subcontractor {
   id: string
   company_name: string
