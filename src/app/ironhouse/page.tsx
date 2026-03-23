@@ -6,6 +6,7 @@ import { TabNav } from '@/components/tracker/TabNav'
 import { LeadsTable } from '@/components/tracker/LeadsTable'
 import { SubcontractorsTable } from '@/components/tracker/SubcontractorsTable'
 import { GovPricingCalculator } from '@/components/pricing/GovPricingCalculator'
+import { EntityContactsTab } from '@/components/contacts/EntityContactsTab'
 import { Building2 } from 'lucide-react'
 
 const ACCENT = '#B45309'
@@ -16,6 +17,7 @@ const TABS = [
   { id: 'active_bids',    label: 'Active Bids' },
   { id: 'awards',         label: 'Awards' },
   { id: 'pricing',        label: 'Pricing Calculator' },
+  { id: 'contacts',       label: 'Contacts' },
 ]
 
 export default function IronHousePage() {
@@ -82,6 +84,9 @@ export default function IronHousePage() {
           )}
           {activeTab === 'pricing' && (
             <GovPricingCalculator entity="ironhouse" accentColor={ACCENT} />
+          )}
+          {activeTab === 'contacts' && (
+            <EntityContactsTab entity="ironhouse" accentColor={ACCENT} />
           )}
         </main>
       </div>

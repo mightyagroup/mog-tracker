@@ -4,14 +4,15 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { LayoutDashboard, Shield, Activity, Building2, LogOut, Menu, X, Users } from 'lucide-react'
+import { LayoutDashboard, Shield, Activity, Building2, LogOut, Menu, X, Users, CalendarCheck } from 'lucide-react'
 
 const NAV_ITEMS = [
-  { href: '/',          label: 'MOG Command',      dot: '#D4AF37', icon: LayoutDashboard },
-  { href: '/exousia',   label: 'Exousia Solutions', dot: '#D4AF37', icon: Shield },
-  { href: '/vitalx',    label: 'VitalX',            dot: '#06A59A', icon: Activity },
-  { href: '/ironhouse', label: 'IronHouse',         dot: '#B45309', icon: Building2 },
-  { href: '/contacts',  label: 'Contacts',          dot: '#6B7280', icon: Users },
+  { href: '/',           label: 'MOG Command',      dot: '#D4AF37', icon: LayoutDashboard },
+  { href: '/exousia',    label: 'Exousia Solutions', dot: '#D4AF37', icon: Shield },
+  { href: '/vitalx',     label: 'VitalX',            dot: '#06A59A', icon: Activity },
+  { href: '/ironhouse',  label: 'IronHouse',         dot: '#B45309', icon: Building2 },
+  { href: '/contacts',   label: 'Contacts',          dot: '#6B7280', icon: Users },
+  { href: '/compliance', label: 'Compliance',        dot: '#6B7280', icon: CalendarCheck },
 ]
 
 export function Sidebar() {

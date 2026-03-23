@@ -2,7 +2,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Sidebar } from '@/components/layout/Sidebar'
-import { Shield, Activity, Building2, TrendingUp, Clock, FileText, LucideIcon, Users, MessageSquare } from 'lucide-react'
+import { Shield, Activity, Building2, TrendingUp, Clock, FileText, LucideIcon, Users, MessageSquare, CalendarCheck, AlertTriangle } from 'lucide-react'
 
 export default async function CommandCenterPage() {
   const supabase = await createServerSupabaseClient()
@@ -10,12 +10,13 @@ export default async function CommandCenterPage() {
   if (!user) redirect('/login')
 
   // Fetch pipeline counts per entity
-  const [exousiaRes, vitalxRes, ironhouseRes, interactionsRes, contactsRes] = await Promise.all([
+  const [exousiaRes, vitalxRes, ironhouseRes, interactionsRes, contactsRes, complianceRes] = await Promise.all([
     supabase.from('gov_leads').select('id, status, estimated_value, response_deadline, title, entity').eq('entity', 'exousia'),
     supabase.from('gov_leads').select('id, status, estimated_value, response_deadline, title, entity').eq('entity', 'vitalx'),
     supabase.from('gov_leads').select('id, status, estimated_value, response_deadline, title, entity').eq('entity', 'ironhouse'),
     supabase.from('interactions').select('id, interaction_date, interaction_type, subject, notes, entity, gov_lead_id').order('created_at', { ascending: false }).limit(10),
     supabase.from('contacts').select('id', { count: 'exact', head: true }),
+    supabase.from('compliance_records').select('id, name, entity, record_type, expiration_date, cancellation_deadline, monthly_cost'),
   ])
 
   const entities = [
@@ -30,6 +31,25 @@ export default async function CommandCenterPage() {
   const awarded = allLeads.filter(l => l.status === 'awarded').length
   const contactCount = contactsRes.count ?? 0
   const recentActivity = interactionsRes.data ?? []
+
+  // Compliance: upcoming renewals in 30 days + monthly spend
+  const complianceRecords = complianceRes.data ?? []
+  const complianceUpcoming = complianceRecords
+    .filter(r => {
+      const d = r.expiration_date ?? r.cancellation_deadline
+      if (!d) return false
+      const days = Math.ceil((new Date(d).getTime() - now.getTime()) / 86_400_000)
+      return days >= 0 && days <= 30
+    })
+    .sort((a, b) => {
+      const da = new Date((a.expiration_date ?? a.cancellation_deadline)!).getTime()
+      const db = new Date((b.expiration_date ?? b.cancellation_deadline)!).getTime()
+      return da - db
+    })
+    .slice(0, 5)
+  const totalMonthlySpend = complianceRecords
+    .filter(r => r.record_type === 'subscription' && r.monthly_cost)
+    .reduce((s: number, r) => s + (r.monthly_cost ?? 0), 0)
 
   // Upcoming deadlines (next 30 days) across all entities
   const now = new Date()
@@ -60,24 +80,42 @@ export default async function CommandCenterPage() {
           </div>
 
           {/* Quick access row */}
-          <div className="grid grid-cols-2 gap-4 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
             <Link href="/contacts">
               <div className="bg-[#1F2937] rounded-xl border border-[#374151] p-4 hover:border-[#4B5563] transition flex items-center gap-3 group">
-                <div className="w-9 h-9 rounded-lg bg-[#D4AF3722] flex items-center justify-center">
+                <div className="w-9 h-9 rounded-lg bg-[#D4AF3722] flex items-center justify-center flex-shrink-0">
                   <Users size={16} className="text-[#D4AF37]" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="text-white font-medium text-sm">Master Contacts</div>
-                  <div className="text-gray-500 text-xs">{contactCount} contact{contactCount !== 1 ? 's' : ''} across all entities</div>
+                  <div className="text-gray-500 text-xs">{contactCount} contact{contactCount !== 1 ? 's' : ''}</div>
                 </div>
-                <span className="ml-auto text-xs text-[#D4AF37] group-hover:underline">View →</span>
+                <span className="ml-auto text-xs text-[#D4AF37] group-hover:underline flex-shrink-0">View →</span>
+              </div>
+            </Link>
+            <Link href="/compliance">
+              <div className="bg-[#1F2937] rounded-xl border border-[#374151] p-4 hover:border-[#4B5563] transition flex items-center gap-3 group">
+                <div className="w-9 h-9 rounded-lg bg-[#D4AF3722] flex items-center justify-center flex-shrink-0">
+                  <CalendarCheck size={16} className="text-[#D4AF37]" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-white font-medium text-sm">Compliance</div>
+                  <div className="text-gray-500 text-xs">
+                    {complianceUpcoming.length > 0 ? (
+                      <span className="text-yellow-400">{complianceUpcoming.length} due in 30d</span>
+                    ) : (
+                      <span>${totalMonthlySpend.toFixed(0)}/mo subscriptions</span>
+                    )}
+                  </div>
+                </div>
+                <span className="ml-auto text-xs text-[#D4AF37] group-hover:underline flex-shrink-0">View →</span>
               </div>
             </Link>
             <div className="bg-[#1F2937] rounded-xl border border-[#374151] p-4 flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-[#06A59A22] flex items-center justify-center">
+              <div className="w-9 h-9 rounded-lg bg-[#06A59A22] flex items-center justify-center flex-shrink-0">
                 <MessageSquare size={16} className="text-[#06A59A]" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="text-white font-medium text-sm">Recent Activity</div>
                 <div className="text-gray-500 text-xs">{recentActivity.length} recent interaction{recentActivity.length !== 1 ? 's' : ''}</div>
               </div>
@@ -130,6 +168,40 @@ export default async function CommandCenterPage() {
               )
             })}
           </div>
+
+          {/* Compliance alert strip */}
+          {complianceUpcoming.length > 0 && (
+            <div className="mb-6 bg-[#1F2937] rounded-xl border border-yellow-900/50 overflow-hidden">
+              <div className="flex items-center gap-2 px-5 py-3 border-b border-[#374151]">
+                <AlertTriangle size={14} className="text-yellow-400" />
+                <h3 className="text-white font-medium text-sm">Compliance Due in 30 Days</h3>
+                <Link href="/compliance" className="ml-auto text-xs text-[#D4AF37] hover:underline">View all →</Link>
+              </div>
+              <div className="divide-y divide-[#374151]">
+                {complianceUpcoming.map((r: { id: string; name: string; entity: string; record_type: string; expiration_date?: string | null; cancellation_deadline?: string | null; monthly_cost?: number | null }) => {
+                  const d = r.expiration_date ?? r.cancellation_deadline
+                  const days = d ? Math.ceil((new Date(d).getTime() - now.getTime()) / 86_400_000) : null
+                  const entityColors: Record<string, string> = { exousia: '#D4AF37', vitalx: '#06A59A', ironhouse: '#B45309' }
+                  const dColor = days !== null && days <= 7 ? '#FCA5A5' : '#FCD34D'
+                  return (
+                    <div key={r.id} className="flex items-center justify-between px-5 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: entityColors[r.entity] ?? '#6B7280' }} />
+                        <div>
+                          <div className="text-gray-200 text-sm">{r.name}</div>
+                          <div className="text-gray-500 text-xs capitalize">{r.entity} · {r.record_type}{r.monthly_cost ? ` · $${r.monthly_cost}/mo` : ''}</div>
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <div className="font-semibold text-sm" style={{ color: dColor }}>{days === 0 ? 'Today' : `${days}d`}</div>
+                        {d && <div className="text-gray-600 text-xs">{new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Upcoming deadlines */}

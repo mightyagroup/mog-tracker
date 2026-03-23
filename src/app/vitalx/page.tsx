@@ -8,6 +8,7 @@ import { SubcontractorsTable } from '@/components/tracker/SubcontractorsTable'
 import { CommercialLeadsTable } from '@/components/tracker/CommercialLeadsTable'
 import { GovPricingCalculator } from '@/components/pricing/GovPricingCalculator'
 import { CommercialPricingCalculator } from '@/components/pricing/CommercialPricingCalculator'
+import { EntityContactsTab } from '@/components/contacts/EntityContactsTab'
 import { Activity } from 'lucide-react'
 
 const ACCENT = '#06A59A'
@@ -18,6 +19,7 @@ const GOV_TABS = [
   { id: 'active_bids',    label: 'Active Bids' },
   { id: 'awards',         label: 'Awards' },
   { id: 'pricing',        label: 'Pricing Calculator' },
+  { id: 'contacts',       label: 'Contacts' },
 ]
 
 const COMMERCIAL_TABS = [
@@ -111,6 +113,9 @@ export default function VitalXPage() {
               )}
               {govTab === 'pricing' && (
                 <GovPricingCalculator entity="vitalx" accentColor={ACCENT} />
+              )}
+              {govTab === 'contacts' && (
+                <EntityContactsTab entity="vitalx" accentColor={ACCENT} />
               )}
             </main>
           </>

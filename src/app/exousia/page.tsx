@@ -6,6 +6,7 @@ import { TabNav } from '@/components/tracker/TabNav'
 import { LeadsTable } from '@/components/tracker/LeadsTable'
 import { SubcontractorsTable } from '@/components/tracker/SubcontractorsTable'
 import { GovPricingCalculator } from '@/components/pricing/GovPricingCalculator'
+import { EntityContactsTab } from '@/components/contacts/EntityContactsTab'
 import { Shield } from 'lucide-react'
 
 const ACCENT = '#D4AF37'
@@ -16,6 +17,7 @@ const TABS = [
   { id: 'active_bids',     label: 'Active Bids' },
   { id: 'awards',          label: 'Awards' },
   { id: 'pricing',         label: 'Pricing Calculator' },
+  { id: 'contacts',        label: 'Contacts' },
 ]
 
 export default function ExousiaPage() {
@@ -75,6 +77,9 @@ export default function ExousiaPage() {
           )}
           {activeTab === 'pricing' && (
             <GovPricingCalculator entity="exousia" accentColor={ACCENT} />
+          )}
+          {activeTab === 'contacts' && (
+            <EntityContactsTab entity="exousia" accentColor={ACCENT} />
           )}
         </main>
       </div>
