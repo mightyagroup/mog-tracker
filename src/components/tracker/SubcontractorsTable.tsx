@@ -6,7 +6,7 @@ import { Subcontractor, EntityType } from '@/lib/types'
 import { Modal } from '@/components/common/Modal'
 import { EmptyState } from '@/components/common/EmptyState'
 import { LoadingPage } from '@/components/common/LoadingSpinner'
-import { Building2, Plus, ExternalLink, ChevronDown, ChevronUp, Star } from 'lucide-react'
+import { Building2, Plus, ExternalLink, ChevronDown, ChevronUp, Star, Zap } from 'lucide-react'
 
 interface SubcontractorsTableProps {
   entity: EntityType
@@ -34,6 +34,7 @@ const EMPTY_SUB: Omit<Subcontractor, 'id' | 'created_at' | 'updated_at'> = {
   services_offered: '',
   geographic_coverage: '',
   entities_associated: [],
+  sub_type: 'teaming_partner',
   teaming_agreement_status: 'none',
   teaming_agreement_url: '',
   fit_score: 0,
@@ -45,15 +46,15 @@ export function SubcontractorsTable({ entity }: SubcontractorsTableProps) {
   const [subs, setSubs] = useState<Subcontractor[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
+  const [showQuickAdd, setShowQuickAdd] = useState(false)
   const [form, setForm] = useState({ ...EMPTY_SUB, entities_associated: [entity] as EntityType[] })
   const [saving, setSaving] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [tagFilter, setTagFilter] = useState<string>('')
+  const [typeFilter, setTypeFilter] = useState<'all' | 'teaming_partner' | 'fulfillment_sub'>('all')
   const [search, setSearch] = useState('')
 
-  useEffect(() => {
-    fetchSubs()
-  }, [entity])
+  useEffect(() => { fetchSubs() }, [entity])
 
   async function fetchSubs() {
     setLoading(true)
@@ -67,25 +68,18 @@ export function SubcontractorsTable({ entity }: SubcontractorsTableProps) {
     setLoading(false)
   }
 
-  async function handleSave() {
+  async function handleSave(payload: typeof form) {
     setSaving(true)
     const supabase = createClient()
     const { data, error } = await supabase
       .from('subcontractors')
-      .insert({
-        ...form,
-        entities_associated: form.entities_associated,
-        certifications: form.certifications,
-        naics_codes: form.naics_codes,
-        set_asides: form.set_asides,
-        service_tags: form.service_tags,
-      })
+      .insert({ ...payload })
       .select()
       .single()
-
     if (!error && data) {
       setSubs(prev => [...prev, data].sort((a, b) => (b.fit_score ?? 0) - (a.fit_score ?? 0)))
       setShowModal(false)
+      setShowQuickAdd(false)
       setForm({ ...EMPTY_SUB, entities_associated: [entity] })
     }
     setSaving(false)
@@ -106,6 +100,7 @@ export function SubcontractorsTable({ entity }: SubcontractorsTableProps) {
   }
 
   const displayed = subs.filter(s => {
+    if (typeFilter !== 'all' && s.sub_type !== typeFilter) return false
     if (tagFilter && !(s.service_tags ?? []).includes(tagFilter)) return false
     if (search) {
       const q = search.toLowerCase()
@@ -118,25 +113,62 @@ export function SubcontractorsTable({ entity }: SubcontractorsTableProps) {
     return true
   })
 
+  const teamingCount = subs.filter(s => s.sub_type === 'teaming_partner').length
+  const fulfillmentCount = subs.filter(s => s.sub_type === 'fulfillment_sub').length
+
   if (loading) return <LoadingPage />
 
   return (
     <div>
+      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-white font-semibold text-lg">Subcontractors</h2>
-          <p className="text-gray-400 text-sm mt-0.5">{subs.length} partner{subs.length !== 1 ? 's' : ''}</p>
+          <p className="text-gray-400 text-sm mt-0.5">
+            {teamingCount} teaming partner{teamingCount !== 1 ? 's' : ''} · {fulfillmentCount} fulfillment sub{fulfillmentCount !== 1 ? 's' : ''}
+          </p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-[#D4AF37] hover:bg-[#b8952e] text-[#111827] font-semibold text-sm rounded-lg transition"
-        >
-          <Plus size={16} />
-          Add Subcontractor
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { setForm({ ...EMPTY_SUB, entities_associated: [entity], sub_type: 'fulfillment_sub' }); setShowQuickAdd(true) }}
+            title="Quick-add a local or national fulfillment sub"
+            className="flex items-center gap-1.5 px-3 py-2 bg-[#1F2937] hover:bg-[#253347] border border-[#374151] text-gray-300 font-medium text-sm rounded-lg transition"
+          >
+            <Zap size={14} className="text-yellow-400" />
+            Quick Add
+          </button>
+          <button
+            onClick={() => { setForm({ ...EMPTY_SUB, entities_associated: [entity] }); setShowModal(true) }}
+            className="flex items-center gap-2 px-4 py-2 bg-[#D4AF37] hover:bg-[#b8952e] text-[#111827] font-semibold text-sm rounded-lg transition"
+          >
+            <Plus size={16} />
+            Add Teaming Partner
+          </button>
+        </div>
       </div>
 
-      {/* Filters */}
+      {/* Type tabs */}
+      <div className="flex items-center gap-1 mb-4 bg-[#111827] border border-[#374151] rounded-lg p-1 self-start inline-flex">
+        {([
+          { value: 'all', label: `All (${subs.length})` },
+          { value: 'teaming_partner', label: `Teaming (${teamingCount})` },
+          { value: 'fulfillment_sub', label: `Fulfillment (${fulfillmentCount})` },
+        ] as const).map(opt => (
+          <button
+            key={opt.value}
+            onClick={() => setTypeFilter(opt.value)}
+            className="px-3 py-1.5 rounded text-xs font-medium transition"
+            style={typeFilter === opt.value
+              ? { backgroundColor: '#D4AF3722', color: '#D4AF37' }
+              : { color: '#9CA3AF' }
+            }
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Search + tag filter */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
         <input
           value={search}
@@ -149,7 +181,7 @@ export function SubcontractorsTable({ entity }: SubcontractorsTableProps) {
           onChange={e => setTagFilter(e.target.value)}
           className="bg-[#1F2937] border border-[#374151] rounded-lg px-3 py-1.5 text-sm text-gray-300 focus:outline-none"
         >
-          <option value="">All Services</option>
+          <option value="">All Service Tags</option>
           {ALL_SERVICE_TAGS.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
         {(tagFilter || search) && (
@@ -165,7 +197,7 @@ export function SubcontractorsTable({ entity }: SubcontractorsTableProps) {
           icon={Building2}
           title="No subcontractors match"
           description="Try adjusting the filter or add a new subcontractor."
-          action={{ label: 'Add Subcontractor', onClick: () => setShowModal(true) }}
+          action={{ label: 'Add Teaming Partner', onClick: () => { setForm({ ...EMPTY_SUB, entities_associated: [entity] }); setShowModal(true) } }}
         />
       ) : (
         <div className="space-y-3">
@@ -180,19 +212,27 @@ export function SubcontractorsTable({ entity }: SubcontractorsTableProps) {
         </div>
       )}
 
-      {/* Add modal */}
+      {/* ── Quick Add modal (minimal) ── */}
+      {showQuickAdd && (
+        <QuickAddModal
+          entity={entity}
+          onClose={() => setShowQuickAdd(false)}
+          onSave={payload => handleSave({ ...EMPTY_SUB, entities_associated: [entity], ...payload })}
+          saving={saving}
+        />
+      )}
+
+      {/* ── Full Add Teaming Partner modal ── */}
       {showModal && (
         <Modal
-          title="Add Subcontractor"
+          title="Add Teaming Partner"
           onClose={() => setShowModal(false)}
           size="lg"
           footer={
             <>
-              <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm text-gray-400 hover:text-white transition">
-                Cancel
-              </button>
+              <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm text-gray-400 hover:text-white transition">Cancel</button>
               <button
-                onClick={handleSave}
+                onClick={() => handleSave(form)}
                 disabled={saving || !form.company_name}
                 className="px-5 py-2 bg-[#D4AF37] hover:bg-[#b8952e] disabled:opacity-50 text-[#111827] font-semibold text-sm rounded-lg transition"
               >
@@ -241,29 +281,17 @@ export function SubcontractorsTable({ entity }: SubcontractorsTableProps) {
             <FormField label="Website">
               <input type="url" className={inputCls} value={form.website ?? ''} onChange={e => setForm(f => ({ ...f, website: e.target.value }))} />
             </FormField>
-
-            {/* Service Tags */}
             <div className="col-span-2">
               <FormField label="Service Tags">
                 <div className="flex flex-wrap gap-1.5 mt-1">
                   {ALL_SERVICE_TAGS.map(tag => (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={() => toggleTag(tag)}
-                      className={`px-2.5 py-1 rounded-full text-xs font-medium transition ${
-                        form.service_tags.includes(tag)
-                          ? 'bg-[#D4AF37] text-[#111827]'
-                          : 'bg-[#374151] text-gray-400 hover:text-white'
-                      }`}
-                    >
-                      {tag}
-                    </button>
+                    <button key={tag} type="button" onClick={() => toggleTag(tag)}
+                      className={`px-2.5 py-1 rounded-full text-xs font-medium transition ${form.service_tags.includes(tag) ? 'bg-[#D4AF37] text-[#111827]' : 'bg-[#374151] text-gray-400 hover:text-white'}`}
+                    >{tag}</button>
                   ))}
                 </div>
               </FormField>
             </div>
-
             <div className="col-span-2">
               <FormField label="Services Offered">
                 <textarea className={inputCls + ' resize-none'} rows={2} value={form.services_offered ?? ''} onChange={e => setForm(f => ({ ...f, services_offered: e.target.value }))} />
@@ -281,9 +309,115 @@ export function SubcontractorsTable({ entity }: SubcontractorsTableProps) {
   )
 }
 
+// ── Quick Add Modal (minimal — for local subs found in the field) ─────────────
+function QuickAddModal({
+  entity,
+  onClose,
+  onSave,
+  saving,
+}: {
+  entity: EntityType
+  onClose: () => void
+  onSave: (payload: Partial<Omit<Subcontractor, 'id' | 'created_at' | 'updated_at'>>) => void
+  saving: boolean
+}) {
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [website, setWebsite] = useState('')
+  const [coverage, setCoverage] = useState('')
+  const [notes, setNotes] = useState('')
+  const [tags, setTags] = useState<string[]>([])
+  const [subType, setSubType] = useState<'teaming_partner' | 'fulfillment_sub'>('fulfillment_sub')
+
+  function toggleTag(tag: string) {
+    setTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag])
+  }
+
+  return (
+    <Modal
+      title="Quick Add Subcontractor"
+      onClose={onClose}
+      size="md"
+      footer={
+        <>
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-400 hover:text-white transition">Cancel</button>
+          <button
+            onClick={() => onSave({
+              company_name: name.trim(),
+              contact_phone: phone.trim() || null,
+              website: website.trim() || null,
+              geographic_coverage: coverage.trim() || null,
+              service_tags: tags,
+              notes: notes.trim() || null,
+              sub_type: subType,
+              entities_associated: [entity],
+              certifications: [],
+              naics_codes: [],
+              set_asides: [],
+              teaming_agreement_status: 'none',
+              fit_score: 0,
+              reputation_rating: 0,
+            })}
+            disabled={saving || !name.trim()}
+            className="px-5 py-2 bg-[#D4AF37] hover:bg-[#b8952e] disabled:opacity-50 text-[#111827] font-semibold text-sm rounded-lg transition"
+          >
+            {saving ? 'Saving...' : 'Add'}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div>
+          <label className={lblCls}>Company Name *</label>
+          <input autoFocus className={inputCls} value={name} onChange={e => setName(e.target.value)} placeholder="e.g., Northern VA Plumbing LLC" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={lblCls}>Type</label>
+            <select className={inputCls} value={subType} onChange={e => setSubType(e.target.value as typeof subType)}>
+              <option value="fulfillment_sub">Fulfillment Sub</option>
+              <option value="teaming_partner">Teaming Partner</option>
+            </select>
+          </div>
+          <div>
+            <label className={lblCls}>Phone</label>
+            <input className={inputCls} value={phone} onChange={e => setPhone(e.target.value)} placeholder="(703) 555-0000" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={lblCls}>Website</label>
+            <input type="url" className={inputCls} value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://..." />
+          </div>
+          <div>
+            <label className={lblCls}>Coverage Area</label>
+            <input className={inputCls} value={coverage} onChange={e => setCoverage(e.target.value)} placeholder="Northern VA, DMV" />
+          </div>
+        </div>
+        <div>
+          <label className={lblCls}>Service Tags</label>
+          <div className="flex flex-wrap gap-1.5 mt-1">
+            {ALL_SERVICE_TAGS.map(tag => (
+              <button key={tag} type="button" onClick={() => toggleTag(tag)}
+                className={`px-2.5 py-1 rounded-full text-xs font-medium transition ${tags.includes(tag) ? 'bg-[#D4AF37] text-[#111827]' : 'bg-[#374151] text-gray-400 hover:text-white'}`}
+              >{tag}</button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <label className={lblCls}>Notes</label>
+          <textarea className={inputCls + ' resize-none'} rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Where you found them, any relevant details…" />
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+// ── SubCard ───────────────────────────────────────────────────────────────────
 function SubCard({ sub, expanded, onToggle }: { sub: Subcontractor; expanded: boolean; onToggle: () => void }) {
   const score = sub.fit_score ?? 0
   const scoreColor = score >= 80 ? '#4ADE80' : score >= 60 ? '#FCD34D' : '#9CA3AF'
+  const isTeaming = sub.sub_type === 'teaming_partner'
 
   return (
     <div className="bg-[#1F2937] rounded-xl border border-[#374151] overflow-hidden">
@@ -296,24 +430,29 @@ function SubCard({ sub, expanded, onToggle }: { sub: Subcontractor; expanded: bo
             <Building2 size={16} className="text-gray-400" />
           </div>
           <div className="min-w-0">
-            <div className="text-white font-medium truncate">{sub.company_name}</div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-white font-medium truncate">{sub.company_name}</span>
+              {/* Sub type badge */}
+              <span className={`px-1.5 py-0.5 rounded text-xs font-medium flex-shrink-0 ${
+                isTeaming ? 'bg-[#172554] text-blue-300' : 'bg-[#1c1917] text-orange-300'
+              }`}>
+                {isTeaming ? 'Teaming' : 'Fulfillment'}
+              </span>
+            </div>
             <div className="text-gray-400 text-sm truncate">
-              {sub.contact_name || '—'}{sub.geographic_coverage ? ` · ${sub.geographic_coverage}` : ''}
+              {sub.contact_name || sub.geographic_coverage || '—'}
+              {sub.contact_name && sub.geographic_coverage ? ` · ${sub.geographic_coverage}` : ''}
             </div>
           </div>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0 ml-4">
-          {/* Service tags (up to 3) */}
-          {(sub.service_tags ?? []).slice(0, 3).map(tag => (
-            <span key={tag} className="px-2 py-0.5 rounded text-xs bg-[#1e3a5f] text-blue-300 font-medium hidden sm:inline">
-              {tag}
-            </span>
+          {/* Service tags (up to 2) */}
+          {(sub.service_tags ?? []).slice(0, 2).map(tag => (
+            <span key={tag} className="px-2 py-0.5 rounded text-xs bg-[#1e3a5f] text-blue-300 font-medium hidden sm:inline">{tag}</span>
           ))}
-          {/* Certifications (up to 2) */}
-          {sub.certifications.slice(0, 2).map(cert => (
-            <span key={cert} className="px-2 py-0.5 rounded text-xs bg-[#2e1065] text-purple-300 font-medium hidden md:inline">
-              {cert}
-            </span>
+          {/* Certifications (up to 2, teaming partners only) */}
+          {isTeaming && sub.certifications.slice(0, 2).map(cert => (
+            <span key={cert} className="px-2 py-0.5 rounded text-xs bg-[#2e1065] text-purple-300 font-medium hidden md:inline">{cert}</span>
           ))}
           {/* Fit Score */}
           {score > 0 && (
@@ -322,45 +461,45 @@ function SubCard({ sub, expanded, onToggle }: { sub: Subcontractor; expanded: bo
               <span className="text-xs font-semibold" style={{ color: scoreColor }}>{score}</span>
             </div>
           )}
-          {/* Teaming status */}
-          <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-            sub.teaming_agreement_status === 'executed'
-              ? 'bg-[#052e16] text-green-400'
-              : sub.teaming_agreement_status === 'drafting'
-              ? 'bg-[#3b2a1a] text-yellow-300'
+          {/* Teaming status (only for teaming partners) */}
+          {isTeaming && (
+            <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+              sub.teaming_agreement_status === 'executed' ? 'bg-[#052e16] text-green-400'
+              : sub.teaming_agreement_status === 'drafting' ? 'bg-[#3b2a1a] text-yellow-300'
               : 'bg-[#1F2937] text-gray-500'
-          }`}>
-            {sub.teaming_agreement_status === 'executed' ? 'Executed'
-              : sub.teaming_agreement_status === 'drafting' ? 'Drafting'
-              : 'No Agreement'}
-          </span>
+            }`}>
+              {sub.teaming_agreement_status === 'executed' ? 'Executed'
+                : sub.teaming_agreement_status === 'drafting' ? 'Drafting'
+                : 'No Agreement'}
+            </span>
+          )}
           {expanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
         </div>
       </button>
 
       {expanded && (
         <div className="px-5 pb-5 pt-3 border-t border-[#374151] space-y-4 text-sm">
-          {/* Service tags all */}
+          {/* Service tags full list */}
           {(sub.service_tags ?? []).length > 0 && (
             <div>
               <div className="text-gray-500 text-xs mb-1.5">Service Tags</div>
               <div className="flex flex-wrap gap-1.5">
                 {(sub.service_tags ?? []).map(tag => (
-                  <span key={tag} className="px-2.5 py-0.5 rounded-full text-xs bg-[#1e3a5f] text-blue-300 font-medium">
-                    {tag}
-                  </span>
+                  <span key={tag} className="px-2.5 py-0.5 rounded-full text-xs bg-[#1e3a5f] text-blue-300 font-medium">{tag}</span>
                 ))}
               </div>
             </div>
           )}
 
           <div className="grid grid-cols-2 gap-4">
-            <Detail label="UEI" value={sub.uei} />
-            <Detail label="CAGE Code" value={sub.cage_code} />
-            <Detail label="Phone" value={sub.contact_phone} />
-            <Detail label="Email" value={sub.contact_email} />
-            {sub.certifications.length > 0 && (
-              <div>
+            {sub.contact_name && <Detail label="Contact" value={sub.contact_name} />}
+            {sub.contact_email && <Detail label="Email" value={sub.contact_email} />}
+            {sub.contact_phone && <Detail label="Phone" value={sub.contact_phone} />}
+            {sub.geographic_coverage && <Detail label="Coverage" value={sub.geographic_coverage} />}
+            {isTeaming && sub.uei && <Detail label="UEI" value={sub.uei} />}
+            {isTeaming && sub.cage_code && <Detail label="CAGE" value={sub.cage_code} />}
+            {isTeaming && sub.certifications.length > 0 && (
+              <div className="col-span-2">
                 <div className="text-gray-500 text-xs mb-1">Certifications</div>
                 <div className="flex flex-wrap gap-1">
                   {sub.certifications.map(c => (
@@ -369,12 +508,11 @@ function SubCard({ sub, expanded, onToggle }: { sub: Subcontractor; expanded: bo
                 </div>
               </div>
             )}
-            <Detail label="NAICS Codes" value={sub.naics_codes.join(', ') || null} />
           </div>
 
           {sub.services_offered && (
             <div>
-              <div className="text-gray-500 text-xs mb-1">Services Offered</div>
+              <div className="text-gray-500 text-xs mb-1">Services</div>
               <div className="text-gray-200">{sub.services_offered}</div>
             </div>
           )}
@@ -390,16 +528,12 @@ function SubCard({ sub, expanded, onToggle }: { sub: Subcontractor; expanded: bo
               <ExternalLink size={13} /> {sub.website}
             </a>
           )}
-
-          {/* Reputation */}
           {(sub.reputation_rating ?? 0) > 0 && (
             <div className="flex items-center gap-1.5 text-xs text-gray-400">
               <span>Reputation:</span>
               <div className="flex gap-0.5">
                 {[...Array(5)].map((_, i) => (
-                  <Star
-                    key={i}
-                    size={11}
+                  <Star key={i} size={11}
                     className={i < Math.round((sub.reputation_rating ?? 0) / 20) ? 'text-yellow-400' : 'text-gray-600'}
                     fill={i < Math.round((sub.reputation_rating ?? 0) / 20) ? 'currentColor' : 'none'}
                   />
@@ -436,3 +570,4 @@ function FormField({ label, children, required }: { label: string; children: Rea
 }
 
 const inputCls = 'w-full bg-[#111827] border border-[#374151] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-[#D4AF37] focus:border-[#D4AF37] transition'
+const lblCls = 'block text-xs font-medium text-gray-400 mb-1.5'

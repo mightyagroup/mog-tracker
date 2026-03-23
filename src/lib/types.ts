@@ -165,6 +165,7 @@ export interface Subcontractor {
   services_offered?: string | null
   geographic_coverage?: string | null
   entities_associated: EntityType[]
+  sub_type: string
   teaming_agreement_status: string
   teaming_agreement_url?: string | null
   fit_score: number

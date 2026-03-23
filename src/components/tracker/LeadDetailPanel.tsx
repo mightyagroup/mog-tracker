@@ -553,28 +553,31 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
               <div>
                 <SectionLabel>Suggested Partners</SectionLabel>
                 {suggestedSubs.length === 0 ? (
-                  <p className="text-gray-600 text-xs italic">No matching subcontractors found. Add subcontractors with matching NAICS codes or set-asides to see suggestions here.</p>
+                  <p className="text-gray-600 text-xs italic">No matching subcontractors found. Add subcontractors with matching service tags or NAICS codes to see suggestions here.</p>
                 ) : (
-                  <div className="space-y-2">
-                    {suggestedSubs.map(sub => (
-                      <div key={sub.id} className="flex items-start gap-3 px-3 py-2.5 bg-[#111827] rounded-lg border border-[#374151]">
-                        <div className="flex-1 min-w-0">
-                          <div className="text-white text-sm font-medium">{sub.company_name}</div>
-                          {sub.contact_name && <div className="text-gray-400 text-xs">{sub.contact_name}</div>}
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {sub.matchReasons.map(r => (
-                              <span key={r} className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: accentColor + '22', color: accentColor }}>{r}</span>
-                            ))}
-                            {sub.teaming_agreement_status === 'executed' && (
-                              <span className="text-xs px-1.5 py-0.5 rounded bg-[#052e16] text-green-400">teaming ✓</span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-xs font-bold flex-shrink-0" style={{ color: sub.matchScore >= 60 ? '#4ADE80' : sub.matchScore >= 40 ? '#FCD34D' : '#9CA3AF' }}>
-                          {sub.matchScore}%
+                  <div className="space-y-4">
+                    {/* Teaming Partners first */}
+                    {suggestedSubs.filter(s => s.sub_type === 'teaming_partner').length > 0 && (
+                      <div>
+                        <div className="text-xs font-semibold text-blue-400 mb-1.5 uppercase tracking-wide">Teaming Partners (SAM-registered)</div>
+                        <div className="space-y-2">
+                          {suggestedSubs.filter(s => s.sub_type === 'teaming_partner').map(sub => (
+                            <SuggestedSubCard key={sub.id} sub={sub} accentColor={accentColor} />
+                          ))}
                         </div>
                       </div>
-                    ))}
+                    )}
+                    {/* Fulfillment Subs second */}
+                    {suggestedSubs.filter(s => s.sub_type !== 'teaming_partner').length > 0 && (
+                      <div>
+                        <div className="text-xs font-semibold text-orange-400 mb-1.5 uppercase tracking-wide">Fulfillment Subs</div>
+                        <div className="space-y-2">
+                          {suggestedSubs.filter(s => s.sub_type !== 'teaming_partner').map(sub => (
+                            <SuggestedSubCard key={sub.id} sub={sub} accentColor={accentColor} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -763,6 +766,34 @@ function InfoRow({ label, value }: { label: string; value?: string | null }) {
     <div>
       <div className={labelCls}>{label}</div>
       <div className="text-gray-200 text-sm">{value}</div>
+    </div>
+  )
+}
+
+function SuggestedSubCard({
+  sub, accentColor,
+}: {
+  sub: Subcontractor & { matchScore: number; matchReasons: string[] }
+  accentColor: string
+}) {
+  return (
+    <div className="flex items-start gap-3 px-3 py-2.5 bg-[#111827] rounded-lg border border-[#374151]">
+      <div className="flex-1 min-w-0">
+        <div className="text-white text-sm font-medium">{sub.company_name}</div>
+        {sub.contact_name && <div className="text-gray-400 text-xs">{sub.contact_name}</div>}
+        {sub.contact_phone && <div className="text-gray-500 text-xs">{sub.contact_phone}</div>}
+        <div className="flex flex-wrap gap-1 mt-1">
+          {sub.matchReasons.map(r => (
+            <span key={r} className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: accentColor + '22', color: accentColor }}>{r}</span>
+          ))}
+          {sub.sub_type === 'teaming_partner' && sub.teaming_agreement_status === 'executed' && (
+            <span className="text-xs px-1.5 py-0.5 rounded bg-[#052e16] text-green-400">teaming ✓</span>
+          )}
+        </div>
+      </div>
+      <div className="text-xs font-bold flex-shrink-0" style={{ color: sub.matchScore >= 60 ? '#4ADE80' : sub.matchScore >= 40 ? '#FCD34D' : '#9CA3AF' }}>
+        {sub.matchScore}%
+      </div>
     </div>
   )
 }
