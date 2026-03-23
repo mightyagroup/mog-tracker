@@ -13,18 +13,17 @@ const ALL_NAICS = Array.from(new Set(Object.values(ENTITY_NAICS).flat()))
 // ── SAM.gov set-aside code → our DB enum ─────────────────────────────────────
 function mapSetAside(code: string | null | undefined): string {
   if (!code) return 'none'
-  const c = code.toUpperCase()
-  if (c === 'WOSB')                          return 'wosb'
-  if (c === 'EDWOSB')                        return 'edwosb'
-  if (c === '8A' || c === '8AN')             return '8a'
-  if (c === 'HZC' || c === 'HZS')           return 'hubzone'
-  if (c === 'SDVOSBC' || c === 'SDVOSBS')   return 'sdvosb'
-  if (c === 'SBP' || c === 'SBA')           return 'small_business'
-  if (c === 'VSA' || c === 'VSB' || c === 'VOSB') return 'small_business'
-  if (c === 'SS')                            return 'sole_source'
-  if (c === 'NONE' || c === '' || c === 'N/A') return 'none'
-  // Partial set-asides → small_business
-  if (c.includes('SB') || c.includes('SMALL')) return 'small_business'
+  const c = code.toUpperCase().trim()
+  if (c === 'WOSB')                                 return 'wosb'
+  if (c === 'EDWOSB')                               return 'edwosb'
+  if (c === '8A' || c === '8AN')                    return '8a'
+  if (c === 'HZC' || c === 'HZS')                  return 'hubzone'
+  if (c === 'SDVOSBC' || c === 'SDVOSBS')          return 'sdvosb'
+  if (c === 'SBP' || c === 'SBA')                  return 'small_business'
+  if (c === 'VSA' || c === 'VSB' || c === 'VOSB')  return 'small_business'
+  if (c === 'SS')                                   return 'sole_source'
+  if (c === 'NONE' || c === '' || c === 'N/A')      return 'none'
+  if (c.includes('SB') || c.includes('SMALL'))      return 'small_business'
   return 'none'
 }
 
@@ -33,30 +32,40 @@ function formatPlaceOfPerformance(pop: Record<string, unknown> | null | undefine
   if (!pop) return ''
   const city  = (pop.city  as Record<string, string> | undefined)?.name ?? ''
   const state = (pop.state as Record<string, string> | undefined)?.name ?? ''
-  const parts = [city, state].filter(Boolean)
-  return parts.join(', ')
+  return [city, state].filter(Boolean).join(', ')
+}
+
+// ── Extract NAICS code from SAM.gov response (handles both field shapes) ──────
+// SAM.gov v2 returns either naicsCode (string) or naicsCodes (array), or both
+function extractNaicsCode(opp: Record<string, unknown>): string | undefined {
+  // Singular string field
+  if (typeof opp.naicsCode === 'string' && opp.naicsCode.trim()) {
+    return opp.naicsCode.trim().slice(0, 6) // strip any description suffix
+  }
+  // Plural array field — take the first code
+  if (Array.isArray(opp.naicsCodes) && opp.naicsCodes.length > 0) {
+    const first = opp.naicsCodes[0]
+    if (typeof first === 'string') return first.trim().slice(0, 6)
+    if (typeof first === 'object' && first !== null) {
+      const val = (first as Record<string, unknown>).code ?? (first as Record<string, unknown>).naicsCode
+      if (typeof val === 'string') return val.trim().slice(0, 6)
+    }
+  }
+  // Fallback: check classificationCode (sometimes NAICS is stored there)
+  if (typeof opp.classificationCode === 'string') {
+    const cc = opp.classificationCode.trim()
+    if (/^\d{6}$/.test(cc) && ALL_NAICS.includes(cc)) return cc
+  }
+  return undefined
 }
 
 // ── SAM.gov opportunity response type ────────────────────────────────────────
-interface SamOpportunity {
-  noticeId?: string
-  title?: string
-  solicitationNumber?: string
-  postedDate?: string
-  responseDeadLine?: string
-  archiveDate?: string
-  naicsCode?: string
-  typeOfSetAside?: string
-  fullParentPathName?: string
-  organizationHierarchy?: { level: number; name: string; code: string }[]
-  placeOfPerformance?: Record<string, unknown>
-  description?: string
-  active?: string
-}
+type SamOpportunity = Record<string, unknown>
 
 interface SamResponse {
   opportunitiesData?: SamOpportunity[]
   totalRecords?: number
+  _embedded?: { results?: SamOpportunity[] }
 }
 
 // ── Fetch one page from SAM.gov ───────────────────────────────────────────────
@@ -70,10 +79,14 @@ async function fetchSamPage(apiKey: string, postedFrom: string, offset: number):
     offset:     offset.toString(),
   })
   const url = `https://api.sam.gov/opportunities/v2/search?${params.toString()}`
-  const res = await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(25_000) })
+  const res = await fetch(url, {
+    headers: { Accept: 'application/json' },
+    // AbortSignal.timeout may not be available on all Node versions — use manual controller
+    signal: AbortSignal.timeout ? AbortSignal.timeout(28_000) : undefined,
+  })
   if (!res.ok) {
     const text = await res.text()
-    throw new Error(`SAM.gov API ${res.status}: ${text.slice(0, 200)}`)
+    throw new Error(`SAM.gov API ${res.status}: ${text.slice(0, 300)}`)
   }
   return res.json() as Promise<SamResponse>
 }
@@ -94,24 +107,26 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'SAMGOV_API_KEY not set' }, { status: 500 })
   }
 
+  // ?dryRun=1 — fetch and diagnose without writing to DB
+  const { searchParams } = new URL(request.url)
+  const dryRun = searchParams.get('dryRun') === '1'
+
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   )
 
-  // ── Load service categories for NAICS → category_id mapping ──────────────
+  // ── Load service categories ───────────────────────────────────────────────
   const { data: categories } = await supabase
     .from('service_categories')
     .select('id, entity, naics_codes, keywords, name')
   const catList = categories ?? []
 
   function findCategoryId(entity: string, naicsCode: string | undefined, title: string): string | null {
-    // First: match by NAICS code
     if (naicsCode) {
       const match = catList.find(c => c.entity === entity && (c.naics_codes as string[]).includes(naicsCode))
       if (match) return match.id
     }
-    // Fallback: keyword match on title
     if (title) {
       const tl = title.toLowerCase()
       const match = catList.find(c =>
@@ -120,33 +135,22 @@ export async function GET(request: Request) {
       )
       if (match) return match.id
     }
-    // Last resort: "General Support" or last category
     const fallback = catList.find(c => c.entity === entity && c.name.toLowerCase().includes('general'))
     return fallback?.id ?? null
   }
 
-  // ── Calculate fit score (inline to avoid browser-only issues with date-fns) ─
-  function calcFitScore(entity: string, naicsCode: string | undefined, setAside: string, placeOfPerf: string, estimatedValue: number | null, deadline: string | undefined): number {
+  function calcFitScore(entity: string, naicsCode: string | undefined, setAside: string, placeOfPerf: string, deadline: string | undefined): number {
     let score = 0
-    // Set-aside (0–35)
     if (setAside === 'wosb' || setAside === 'edwosb') score += 35
     else if (setAside === 'small_business' || setAside === 'total_small_business') score += 22
     else if (setAside === 'sole_source') score += 12
     else if (setAside === 'full_and_open') score += 5
-    // NAICS (0–25)
     if (naicsCode && ENTITY_NAICS[entity]?.includes(naicsCode)) score += 25
-    // Location (0–20)
     const loc = placeOfPerf.toLowerCase()
     if (['spotsylvania', 'fredericksburg', 'stafford', 'prince william', 'fairfax', 'loudoun', 'arlington', 'alexandria'].some(s => loc.includes(s))) score += 20
     else if (loc.includes('virginia') || loc.includes(' va ') || loc.includes(', va')) score += 16
     else if (loc.includes('maryland') || loc.includes('district of columbia') || loc.includes(' dc')) score += 12
     else if (loc.includes('nationwide') || loc.includes('remote') || loc === '') score += 8
-    // Value (0–15)
-    const val = estimatedValue ?? 0
-    if (val >= 25_000 && val <= 750_000) score += 15
-    else if (val > 750_000 && val <= 2_000_000) score += 10
-    else if (val > 0 && val < 25_000) score += 3
-    // Time (0–5)
     if (deadline) {
       const daysLeft = Math.ceil((new Date(deadline).getTime() - Date.now()) / 86_400_000)
       if (daysLeft >= 14) score += 5
@@ -156,124 +160,150 @@ export async function GET(request: Request) {
     return Math.min(score, 100)
   }
 
-  // ── Fetch opportunities (up to 3 pages = 300 records) ────────────────────
+  // ── Fetch opportunities ───────────────────────────────────────────────────
   const postedFrom = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
     .toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
 
   let allOpps: SamOpportunity[] = []
-  let inserted = 0
-  let updated = 0
-  let errors = 0
 
   try {
     for (let page = 0; page < 3; page++) {
       const data = await fetchSamPage(apiKey, postedFrom, page * 100)
-      const opps = data.opportunitiesData ?? []
+      // Handle both response shapes
+      const opps = data.opportunitiesData ?? data._embedded?.results ?? []
       allOpps = allOpps.concat(opps)
-      if (opps.length < 100) break // no more pages
+      if (opps.length < 100) break
     }
   } catch (err) {
-    return NextResponse.json(
-      { error: 'SAM.gov fetch failed', detail: String(err) },
-      { status: 502 }
-    )
+    return NextResponse.json({ error: 'SAM.gov fetch failed', detail: String(err) }, { status: 502 })
   }
+
+  // ── Diagnostics ───────────────────────────────────────────────────────────
+  const sampleRaw = allOpps.slice(0, 2).map(o => ({
+    noticeId:         o.noticeId,
+    naicsCode:        o.naicsCode,
+    naicsCodes:       o.naicsCodes,
+    classificationCode: o.classificationCode,
+    typeOfSetAside:   o.typeOfSetAside,
+    responseDeadLine: o.responseDeadLine,
+    placeOfPerformance: o.placeOfPerformance,
+    title:            (o.title as string | undefined)?.slice(0, 80),
+  }))
+
+  let inserted = 0
+  let updated = 0
+  let skippedMalformed = 0
+  let skippedNoEntity = 0
+  const errorLog: string[] = []
 
   // ── Process each opportunity ──────────────────────────────────────────────
   for (const opp of allOpps) {
-    const noticeId        = opp.noticeId ?? ''
-    const title           = opp.title ?? 'Untitled Opportunity'
-    const naicsCode       = opp.naicsCode ?? undefined
-    const setAside        = mapSetAside(opp.typeOfSetAside)
-    const placeOfPerf     = formatPlaceOfPerformance(opp.placeOfPerformance ?? null)
-    const agency          = opp.fullParentPathName ?? null
-    const subAgency       = opp.organizationHierarchy?.find(o => o.level === 2)?.name ?? null
-    const postedDate      = opp.postedDate ? opp.postedDate.slice(0, 10) : null
-    const deadline        = opp.responseDeadLine ?? undefined
-    const archiveDate     = opp.archiveDate ? opp.archiveDate.slice(0, 10) : null
-    const solNum          = opp.solicitationNumber ?? null
-    const samUrl          = noticeId ? `https://sam.gov/opp/${noticeId}/view` : null
+    const noticeId    = typeof opp.noticeId === 'string' ? opp.noticeId : ''
+    const title       = typeof opp.title === 'string' ? opp.title : 'Untitled Opportunity'
+    const naicsCode   = extractNaicsCode(opp)
+    const setAside    = mapSetAside(opp.typeOfSetAside as string | undefined)
+    const placeOfPerf = formatPlaceOfPerformance(opp.placeOfPerformance as Record<string, unknown> | undefined)
+    const agency      = typeof opp.fullParentPathName === 'string' ? opp.fullParentPathName : null
+    const hierarchy   = Array.isArray(opp.organizationHierarchy) ? opp.organizationHierarchy as { level: number; name: string }[] : []
+    const subAgency   = hierarchy.find(o => o.level === 2)?.name ?? null
+    const postedDate  = typeof opp.postedDate === 'string' ? opp.postedDate.slice(0, 10) : null
+    const deadline    = typeof opp.responseDeadLine === 'string' ? opp.responseDeadLine : undefined
+    const archiveDate = typeof opp.archiveDate === 'string' ? opp.archiveDate.slice(0, 10) : null
+    const solNum      = typeof opp.solicitationNumber === 'string' ? opp.solicitationNumber : null
+    const samUrl      = noticeId ? `https://sam.gov/opp/${noticeId}/view` : null
 
-    if (!noticeId && !solNum) continue // skip malformed records
+    if (!noticeId && !solNum) { skippedMalformed++; continue }
 
-    // Route to entities by NAICS
-    const targetEntities = (Object.keys(ENTITY_NAICS) as string[]).filter(
+    const targetEntities = Object.keys(ENTITY_NAICS).filter(
       e => naicsCode && ENTITY_NAICS[e].includes(naicsCode)
     )
-    // Fallback: if no NAICS match but we got the record (shouldn't happen with our NAICS filter), skip
-    if (targetEntities.length === 0) continue
+    if (targetEntities.length === 0) { skippedNoEntity++; continue }
+
+    if (dryRun) { inserted += targetEntities.length; continue }
 
     for (const entity of targetEntities) {
-      const fitScore = calcFitScore(entity, naicsCode, setAside, placeOfPerf, null, deadline)
+      const fitScore   = calcFitScore(entity, naicsCode, setAside, placeOfPerf, deadline)
       const categoryId = findCategoryId(entity, naicsCode, title)
 
       const leadData = {
         entity,
         title,
         solicitation_number: solNum,
-        notice_id:           noticeId || null,
-        status:              'new' as const,
-        source:              'sam_gov' as const,
-        naics_code:          naicsCode ?? null,
-        set_aside:           setAside,
+        notice_id:            noticeId || null,
+        status:               'new',
+        source:               'sam_gov',
+        naics_code:           naicsCode ?? null,
+        set_aside:            setAside,
         agency,
-        sub_agency:          subAgency,
+        sub_agency:           subAgency,
         place_of_performance: placeOfPerf || null,
-        posted_date:         postedDate,
-        response_deadline:   deadline ?? null,
-        archive_date:        archiveDate,
-        sam_gov_url:         samUrl,
-        fit_score:           fitScore,
-        service_category_id: categoryId,
+        posted_date:          postedDate,
+        response_deadline:    deadline ?? null,
+        archive_date:         archiveDate,
+        sam_gov_url:          samUrl,
+        fit_score:            fitScore,
+        service_category_id:  categoryId,
       }
 
       try {
-        // Check for existing record by notice_id + entity (most reliable key)
         const lookupField = noticeId ? 'notice_id' : 'solicitation_number'
         const lookupValue = noticeId || solNum
         if (!lookupValue) continue
 
-        const { data: existing } = await supabase
+        const { data: existing, error: lookupErr } = await supabase
           .from('gov_leads')
-          .select('id, status')
+          .select('id')
           .eq(lookupField, lookupValue)
           .eq('entity', entity)
           .maybeSingle()
 
+        if (lookupErr) {
+          errorLog.push(`lookup(${entity}/${noticeId}): ${lookupErr.message}`)
+          continue
+        }
+
         if (existing) {
-          // Update non-status fields (don't overwrite manual status changes)
-          await supabase
+          const { error: updateErr } = await supabase
             .from('gov_leads')
             .update({
               title,
               agency,
-              sub_agency:          subAgency,
+              sub_agency:           subAgency,
               place_of_performance: placeOfPerf || null,
-              response_deadline:   deadline ?? null,
-              archive_date:        archiveDate,
-              fit_score:           fitScore,
-              service_category_id: categoryId ?? existing.id,
-              sam_gov_url:         samUrl,
+              response_deadline:    deadline ?? null,
+              archive_date:         archiveDate,
+              fit_score:            fitScore,
+              service_category_id:  categoryId,  // null is fine — FK is nullable
+              sam_gov_url:          samUrl,
             })
             .eq('id', existing.id)
-          updated++
+          if (updateErr) errorLog.push(`update(${entity}/${noticeId}): ${updateErr.message}`)
+          else updated++
         } else {
-          const { error } = await supabase.from('gov_leads').insert(leadData)
-          if (error) errors++
-          else inserted++
+          const { error: insertErr } = await supabase.from('gov_leads').insert(leadData)
+          if (insertErr) {
+            errorLog.push(`insert(${entity}/${noticeId || solNum}): ${insertErr.message}`)
+          } else {
+            inserted++
+          }
         }
-      } catch {
-        errors++
+      } catch (e) {
+        errorLog.push(`exception(${entity}/${noticeId}): ${String(e)}`)
       }
     }
   }
 
   return NextResponse.json({
-    success: true,
-    fetched:  allOpps.length,
+    success:          true,
+    dryRun,
+    fetched:          allOpps.length,
     inserted,
     updated,
-    errors,
-    timestamp: new Date().toISOString(),
+    skippedMalformed,
+    skippedNoEntity,
+    errorCount:       errorLog.length,
+    errors:           errorLog.slice(0, 20),
+    sampleRaw,
+    timestamp:        new Date().toISOString(),
   })
 }
