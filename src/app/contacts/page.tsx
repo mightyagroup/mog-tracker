@@ -218,6 +218,7 @@ function ContactDetailPanel({ contact, onClose, onUpdate }: { contact: Contact; 
   const [form, setForm] = useState({ ...contact })
   const [saving, setSaving] = useState(false)
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { setForm({ ...contact }); setEditMode(false) }, [contact.id])
 
   async function handleSave() {

@@ -54,6 +54,7 @@ export function SubcontractorsTable({ entity }: SubcontractorsTableProps) {
   const [typeFilter, setTypeFilter] = useState<'all' | 'teaming_partner' | 'fulfillment_sub'>('all')
   const [search, setSearch] = useState('')
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchSubs() }, [entity])
 
   async function fetchSubs() {

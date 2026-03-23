@@ -623,6 +623,7 @@ function RecordDetailPanel({
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { setForm({ ...record }); setEditMode(false) }, [record.id])
 
   async function handleSave() {

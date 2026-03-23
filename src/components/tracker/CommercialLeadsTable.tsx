@@ -33,6 +33,7 @@ export function CommercialLeadsTable({ presetStatuses, title, accentColor = '#06
   const [selectedLead, setSelectedLead] = useState<CommercialLead | null>(null)
   const [showAdd, setShowAdd] = useState(false)
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchLeads() }, [])
 
   async function fetchLeads() {

@@ -29,6 +29,7 @@ export function CommercialDetailPanel({
   const [addingNote, setAddingNote] = useState(false)
   const [section, setSection] = useState<'info' | 'outreach' | 'notes'>('info')
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     setForm({ ...lead })
     setEditMode(false)

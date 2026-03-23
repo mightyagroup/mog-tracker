@@ -39,6 +39,7 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
   const [usaData, setUsaData] = useState<{ found: boolean; previous_award_total?: number; incumbent_contractor?: string; award_history_notes?: string } | null>(null)
   const [suggestedSubs, setSuggestedSubs] = useState<(Subcontractor & { matchScore: number; matchReasons: string[] })[]>([])
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     setForm({ ...lead })
     setEditMode(false)
