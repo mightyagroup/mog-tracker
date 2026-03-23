@@ -212,6 +212,14 @@ export async function GET(request: Request) {
     const solNum      = typeof opp.solicitationNumber === 'string' ? opp.solicitationNumber : null
     const samUrl      = noticeId ? `https://sam.gov/opp/${noticeId}/view` : null
 
+    // ── Extract contracting officer POC ─────────────────────────────────────
+    const pocs = Array.isArray(opp.pointOfContact) ? opp.pointOfContact as Record<string, unknown>[] : []
+    const primaryPoc = pocs.find(p => p.type === 'primary') ?? pocs[0] ?? null
+    const pocName  = typeof primaryPoc?.fullName === 'string' ? primaryPoc.fullName.trim() : null
+    const pocEmail = typeof primaryPoc?.email === 'string' ? primaryPoc.email.trim().toLowerCase() : null
+    const pocPhone = typeof primaryPoc?.phone === 'string' ? primaryPoc.phone.trim() : null
+    const pocTitle = typeof primaryPoc?.title === 'string' ? primaryPoc.title.trim() : null
+
     if (!noticeId && !solNum) { skippedMalformed++; continue }
 
     const targetEntities = Object.keys(ENTITY_NAICS).filter(
@@ -243,6 +251,9 @@ export async function GET(request: Request) {
         sam_gov_url:          samUrl,
         fit_score:            fitScore,
         service_category_id:  categoryId,
+        contracting_officer_name:  pocName,
+        contracting_officer_email: pocEmail,
+        contracting_officer_phone: pocPhone,
       }
 
       try {
@@ -268,13 +279,16 @@ export async function GET(request: Request) {
             .update({
               title,
               agency,
-              sub_agency:           subAgency,
-              place_of_performance: placeOfPerf || null,
-              response_deadline:    deadline ?? null,
-              archive_date:         archiveDate,
-              fit_score:            fitScore,
-              service_category_id:  categoryId,  // null is fine — FK is nullable
-              sam_gov_url:          samUrl,
+              sub_agency:                subAgency,
+              place_of_performance:      placeOfPerf || null,
+              response_deadline:         deadline ?? null,
+              archive_date:              archiveDate,
+              fit_score:                 fitScore,
+              service_category_id:       categoryId,
+              sam_gov_url:               samUrl,
+              contracting_officer_name:  pocName,
+              contracting_officer_email: pocEmail,
+              contracting_officer_phone: pocPhone,
             })
             .eq('id', existing.id)
           if (updateErr) errorLog.push(`update(${entity}/${noticeId}): ${updateErr.message}`)
@@ -286,6 +300,32 @@ export async function GET(request: Request) {
           } else {
             inserted++
           }
+        }
+
+        // ── Upsert contracting officer to master contacts ──────────────────
+        if (!dryRun && pocEmail) {
+          try {
+            const { data: existingContact } = await supabase
+              .from('contacts')
+              .select('id, entities_associated')
+              .eq('email', pocEmail)
+              .maybeSingle()
+            if (existingContact) {
+              const entities = Array.from(new Set([...(existingContact.entities_associated ?? []), entity]))
+              await supabase.from('contacts').update({ entities_associated: entities }).eq('id', existingContact.id)
+            } else if (pocName) {
+              const parts = pocName.split(' ')
+              await supabase.from('contacts').insert({
+                first_name: parts[0] ?? pocName,
+                last_name: (parts.slice(1).join(' ') || parts[0]) ?? '',
+                title: pocTitle ?? 'Contracting Officer',
+                email: pocEmail,
+                phone: pocPhone ?? null,
+                contact_type: 'contracting_officer',
+                entities_associated: [entity],
+              })
+            }
+          } catch { /* non-fatal */ }
         }
       } catch (e) {
         errorLog.push(`exception(${entity}/${noticeId}): ${String(e)}`)

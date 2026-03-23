@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { GovLead, ServiceCategory, EntityType, ComplianceItem, Interaction, LeadStatus, SetAsideType, SourceType } from '@/lib/types'
+import { GovLead, ServiceCategory, EntityType, ComplianceItem, Interaction, LeadStatus, SetAsideType, SourceType, Subcontractor } from '@/lib/types'
 import {
   LEAD_STATUSES, SET_ASIDE_LABELS, SOURCE_LABELS, CONTRACT_TYPE_LABELS, DEFAULT_COMPLIANCE_ITEMS,
 } from '@/lib/constants'
@@ -37,6 +37,7 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
   const [activeSection, setActiveSection] = useState<'details' | 'compliance' | 'interactions'>('details')
   const [usaLoading, setUsaLoading] = useState(false)
   const [usaData, setUsaData] = useState<{ found: boolean; previous_award_total?: number; incumbent_contractor?: string; award_history_notes?: string } | null>(null)
+  const [suggestedSubs, setSuggestedSubs] = useState<(Subcontractor & { matchScore: number; matchReasons: string[] })[]>([])
 
   useEffect(() => {
     setForm({ ...lead })
@@ -44,11 +45,34 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
     setUsaData(null)
     loadCompliance()
     loadInteractions()
+    loadSuggestedSubs()
     // Auto-lookup if lead has a solicitation number or NAICS + agency
     if (lead.solicitation_number || (lead.naics_code && lead.agency)) {
       lookupUSASpending(lead)
     }
   }, [lead.id])
+
+  async function loadSuggestedSubs() {
+    const supabase = createClient()
+    const { data: subs } = await supabase
+      .from('subcontractors')
+      .select('*')
+    if (!subs || subs.length === 0) return
+
+    const scored = (subs as Subcontractor[]).map(sub => {
+      let score = 0
+      const reasons: string[] = []
+      if ((sub.entities_associated ?? []).includes(entity)) { score += 20; reasons.push('associated entity') }
+      if (lead.naics_code && (sub.naics_codes ?? []).includes(lead.naics_code)) { score += 40; reasons.push(`NAICS ${lead.naics_code}`) }
+      if (lead.set_aside && lead.set_aside !== 'none' && (sub.set_asides ?? []).includes(lead.set_aside)) { score += 25; reasons.push((lead.set_aside ?? '').toUpperCase()) }
+      if (sub.teaming_agreement_status === 'executed') { score += 10; reasons.push('executed teaming agreement') }
+      return { ...sub, matchScore: score, matchReasons: reasons }
+    })
+    .filter(s => s.matchScore > 0)
+    .sort((a, b) => b.matchScore - a.matchScore)
+    .slice(0, 6)
+    setSuggestedSubs(scored)
+  }
 
   async function lookupUSASpending(target: Partial<typeof lead> = lead) {
     setUsaLoading(true)
@@ -134,6 +158,9 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
         incumbent_contractor: form.incumbent_contractor,
         previous_award_total: form.previous_award_total,
         award_history_notes: form.award_history_notes,
+        contracting_officer_name: form.contracting_officer_name,
+        contracting_officer_email: form.contracting_officer_email,
+        contracting_officer_phone: form.contracting_officer_phone,
       })
       .eq('id', lead.id)
       .select('*, service_category:service_categories(*)')
@@ -310,6 +337,36 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                 <EditableField label="NAICS Code" value={form.naics_code} editMode={editMode} onChange={v => setForm(f => ({ ...f, naics_code: v }))} />
               </div>
 
+              {/* Contracting Officer POC */}
+              {(lead.contracting_officer_name || lead.contracting_officer_email || editMode) && (
+                <div>
+                  <SectionLabel>Contracting Officer</SectionLabel>
+                  {editMode ? (
+                    <div className="grid grid-cols-2 gap-4">
+                      <EditableField label="Name" value={form.contracting_officer_name} editMode onChange={v => setForm(f => ({ ...f, contracting_officer_name: v }))} />
+                      <EditableField label="Phone" value={form.contracting_officer_phone} editMode onChange={v => setForm(f => ({ ...f, contracting_officer_phone: v }))} />
+                      <div className="col-span-2">
+                        <EditableField label="Email" value={form.contracting_officer_email} editMode onChange={v => setForm(f => ({ ...f, contracting_officer_email: v }))} />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-start gap-4 p-3 bg-[#111827] rounded-lg border border-[#374151]">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-white text-sm font-medium">{lead.contracting_officer_name ?? '—'}</div>
+                        {lead.contracting_officer_email && (
+                          <a href={`mailto:${lead.contracting_officer_email}`} className="text-xs hover:underline mt-0.5 block" style={{ color: accentColor }}>
+                            {lead.contracting_officer_email}
+                          </a>
+                        )}
+                        {lead.contracting_officer_phone && (
+                          <div className="text-gray-400 text-xs mt-0.5">{lead.contracting_officer_phone}</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Select fields */}
               {editMode && (
                 <div className="grid grid-cols-2 gap-4">
@@ -363,27 +420,55 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                 </div>
               </div>
 
-              {/* Financials */}
+              {/* Pricing Intel */}
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <SectionLabel>Financials &amp; Prior Awards</SectionLabel>
-                  <button
-                    onClick={() => lookupUSASpending(form)}
-                    disabled={usaLoading}
-                    className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition disabled:opacity-50"
-                    title="Lookup prior award data from USASpending.gov"
-                  >
-                    <RefreshCw size={12} className={usaLoading ? 'animate-spin' : ''} />
-                    {usaLoading ? 'Looking up…' : 'USASpending lookup'}
-                  </button>
+                  <SectionLabel>Pricing Intel</SectionLabel>
+                  <div className="flex items-center gap-3">
+                    {lead.solicitation_number && (
+                      <a
+                        href={`https://www.usaspending.gov/search/?hash=def6d3a6b5c1e2f3a4b5c6d7e8f9a0b1`}
+                        target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition"
+                        title="Search USASpending.gov for this opportunity"
+                        onClick={e => {
+                          e.preventDefault()
+                          window.open(`https://www.usaspending.gov/search/?query=${encodeURIComponent(lead.solicitation_number ?? lead.agency ?? '')}`, '_blank')
+                        }}
+                      >
+                        <ExternalLink size={11} />
+                        USASpending.gov
+                      </a>
+                    )}
+                    <button
+                      onClick={() => lookupUSASpending(form)}
+                      disabled={usaLoading}
+                      className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition disabled:opacity-50"
+                    >
+                      <RefreshCw size={12} className={usaLoading ? 'animate-spin' : ''} />
+                      {usaLoading ? 'Looking up…' : 'Refresh'}
+                    </button>
+                  </div>
                 </div>
 
-                {/* USASpending result banner */}
+                {/* USASpending banner */}
                 {usaData && !usaLoading && (
                   <div className={`mb-3 px-3 py-2 rounded-lg text-xs border ${usaData.found ? 'bg-[#052e16] border-green-900 text-green-300' : 'bg-[#1F2937] border-[#374151] text-gray-500'}`}>
-                    {usaData.found
-                      ? `✓ Prior award data found on USASpending.gov — fields auto-populated below.`
-                      : 'No prior award data found on USASpending.gov. You can enter it manually.'}
+                    {usaData.found ? '✓ Prior award data found on USASpending.gov' : 'No prior award data found on USASpending.gov — enter manually.'}
+                  </div>
+                )}
+
+                {/* Key pricing intel at a glance */}
+                {!editMode && (form.previous_award_total ?? lead.previous_award_total ?? form.incumbent_contractor ?? lead.incumbent_contractor) && (
+                  <div className="grid grid-cols-2 gap-3 mb-3 p-3 bg-[#111827] rounded-lg border border-[#374151]">
+                    <div>
+                      <div className="text-gray-500 text-xs mb-0.5">Previous Award Total</div>
+                      <div className="text-white font-bold text-sm">{formatFullCurrency(form.previous_award_total ?? lead.previous_award_total) ?? '—'}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-500 text-xs mb-0.5">Incumbent Contractor</div>
+                      <div className="text-white text-sm font-medium">{form.incumbent_contractor ?? lead.incumbent_contractor ?? '—'}</div>
+                    </div>
                   </div>
                 )}
 
@@ -399,14 +484,12 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                     <>
                       <InfoRow label="Estimated Value" value={formatFullCurrency(lead.estimated_value)} />
                       <InfoRow label="Award Amount" value={formatFullCurrency(lead.award_amount)} />
-                      <InfoRow label="Previous Award Total" value={formatFullCurrency(form.previous_award_total ?? lead.previous_award_total)} />
-                      <InfoRow label="Incumbent" value={form.incumbent_contractor ?? lead.incumbent_contractor} />
                     </>
                   )}
                 </div>
                 {(form.award_history_notes ?? lead.award_history_notes) && !editMode && (
                   <div className="mt-3">
-                    <div className={labelCls}>Award History</div>
+                    <div className={labelCls}>Award History Notes</div>
                     <p className="text-gray-300 text-xs whitespace-pre-wrap leading-relaxed">{form.award_history_notes ?? lead.award_history_notes}</p>
                   </div>
                 )}
@@ -432,6 +515,36 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                     <LinkButton href={lead.sam_gov_url} label="SAM.gov" />
                     <LinkButton href={lead.solicitation_url} label="Solicitation" />
                     <LinkButton href={lead.drive_folder_url} label="Drive Folder" icon={<Folder size={13} />} />
+                  </div>
+                )}
+              </div>
+
+              {/* Suggested Partners */}
+              <div>
+                <SectionLabel>Suggested Partners</SectionLabel>
+                {suggestedSubs.length === 0 ? (
+                  <p className="text-gray-600 text-xs italic">No matching subcontractors found. Add subcontractors with matching NAICS codes or set-asides to see suggestions here.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {suggestedSubs.map(sub => (
+                      <div key={sub.id} className="flex items-start gap-3 px-3 py-2.5 bg-[#111827] rounded-lg border border-[#374151]">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-white text-sm font-medium">{sub.company_name}</div>
+                          {sub.contact_name && <div className="text-gray-400 text-xs">{sub.contact_name}</div>}
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {sub.matchReasons.map(r => (
+                              <span key={r} className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: accentColor + '22', color: accentColor }}>{r}</span>
+                            ))}
+                            {sub.teaming_agreement_status === 'executed' && (
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-[#052e16] text-green-400">teaming ✓</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-xs font-bold flex-shrink-0" style={{ color: sub.matchScore >= 60 ? '#4ADE80' : sub.matchScore >= 40 ? '#FCD34D' : '#9CA3AF' }}>
+                          {sub.matchScore}%
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>

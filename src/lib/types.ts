@@ -91,6 +91,9 @@ export interface GovLead {
   award_history_notes?: string | null
   fit_score: number
   proposal_lead?: string | null
+  contracting_officer_name?: string | null
+  contracting_officer_email?: string | null
+  contracting_officer_phone?: string | null
   sam_gov_url?: string | null
   solicitation_url?: string | null
   drive_folder_url?: string | null

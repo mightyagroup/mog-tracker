@@ -42,6 +42,7 @@ export function LeadsTable({
 }: LeadsTableProps) {
   const [leads, setLeads] = useState<GovLead[]>([])
   const [categories, setCategories] = useState<ServiceCategory[]>([])
+  const [complianceProgress, setComplianceProgress] = useState<Map<string, { completed: number; total: number }>>(new Map())
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilters, setStatusFilters] = useState<LeadStatus[]>([])
@@ -88,8 +89,29 @@ export function LeadsTable({
       supabase.from('service_categories').select('*').eq('entity', entity).order('sort_order'),
     ])
 
-    setLeads((leadsResult.data ?? []) as GovLead[])
+    const fetchedLeads = (leadsResult.data ?? []) as GovLead[]
+    setLeads(fetchedLeads)
     setCategories(catsResult.data ?? [])
+
+    // Fetch compliance progress for all leads in one query
+    const leadIds = fetchedLeads.map(l => l.id)
+    if (leadIds.length > 0) {
+      const { data: ciData } = await supabase
+        .from('compliance_items')
+        .select('gov_lead_id, is_complete')
+        .in('gov_lead_id', leadIds)
+      if (ciData) {
+        const map = new Map<string, { completed: number; total: number }>()
+        for (const row of ciData) {
+          const p = map.get(row.gov_lead_id) ?? { completed: 0, total: 0 }
+          p.total++
+          if (row.is_complete) p.completed++
+          map.set(row.gov_lead_id, p)
+        }
+        setComplianceProgress(map)
+      }
+    }
+
     setLoading(false)
   }
 
@@ -149,6 +171,16 @@ export function LeadsTable({
     await supabase.from('gov_leads').update({ status: newStatus }).eq('id', leadId)
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status: newStatus } : l))
     if (selectedLead?.id === leadId) setSelectedLead(prev => prev ? { ...prev, status: newStatus } : null)
+    // Refresh compliance progress for this lead after status change (it may have gotten new items)
+    if (newStatus === 'active_bid') {
+      setTimeout(async () => {
+        const { data } = await supabase.from('compliance_items').select('gov_lead_id, is_complete').eq('gov_lead_id', leadId)
+        if (data) {
+          const p = { completed: data.filter(r => r.is_complete).length, total: data.length }
+          setComplianceProgress(prev => new Map(prev).set(leadId, p))
+        }
+      }, 800)
+    }
   }
 
   async function handleBulkStatus(newStatus: LeadStatus) {
@@ -397,8 +429,11 @@ export function LeadsTable({
                   <SortHeader field="agency" current={sortField} dir={sortDir} onClick={handleSort}>Agency</SortHeader>
                   <SortHeader field="response_deadline" current={sortField} dir={sortDir} onClick={handleSort}>Deadline</SortHeader>
                   <SortHeader field="estimated_value" current={sortField} dir={sortDir} onClick={handleSort}>Value</SortHeader>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Incumbent</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Prev. Award</th>
                   <SortHeader field="fit_score" current={sortField} dir={sortDir} onClick={handleSort}>Fit</SortHeader>
                   <th className="px-4 py-3 text-left font-medium text-gray-400">Status</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-400">Docs</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-400">Category</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-400">Source</th>
                 </tr>
@@ -436,6 +471,12 @@ export function LeadsTable({
                       <td className="px-4 py-3 text-gray-300 font-mono text-xs whitespace-nowrap">
                         {formatCurrency(lead.estimated_value)}
                       </td>
+                      <td className="px-4 py-3 text-gray-400 text-xs max-w-[120px]">
+                        <span className="truncate block">{lead.incumbent_contractor ?? '—'}</span>
+                      </td>
+                      <td className="px-4 py-3 text-gray-300 font-mono text-xs whitespace-nowrap">
+                        {formatCurrency(lead.previous_award_total)}
+                      </td>
                       <td className="px-4 py-3">
                         <FitScoreBadge score={lead.fit_score} />
                       </td>
@@ -444,6 +485,22 @@ export function LeadsTable({
                           status={lead.status}
                           onChange={s => handleStatusChange(lead.id, s)}
                         />
+                      </td>
+                      <td className="px-4 py-3">
+                        {(() => {
+                          const p = complianceProgress.get(lead.id)
+                          if (!p || p.total === 0) return <span className="text-gray-600 text-xs">—</span>
+                          const pct = Math.round((p.completed / p.total) * 100)
+                          const barColor = pct === 100 ? '#4ADE80' : accentColor
+                          return (
+                            <div className="flex items-center gap-1.5">
+                              <div className="h-1.5 w-14 bg-[#374151] rounded-full overflow-hidden flex-shrink-0">
+                                <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: barColor }} />
+                              </div>
+                              <span className="text-xs text-gray-400 whitespace-nowrap">{p.completed}/{p.total}</span>
+                            </div>
+                          )
+                        })()}
                       </td>
                       <td className="px-4 py-3">
                         {cat ? <CategoryBadge name={cat.name} color={cat.color} /> : <span className="text-gray-600 text-xs">—</span>}
