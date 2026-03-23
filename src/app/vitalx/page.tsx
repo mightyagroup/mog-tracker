@@ -6,6 +6,8 @@ import { TabNav } from '@/components/tracker/TabNav'
 import { LeadsTable } from '@/components/tracker/LeadsTable'
 import { SubcontractorsTable } from '@/components/tracker/SubcontractorsTable'
 import { CommercialLeadsTable } from '@/components/tracker/CommercialLeadsTable'
+import { GovPricingCalculator } from '@/components/pricing/GovPricingCalculator'
+import { CommercialPricingCalculator } from '@/components/pricing/CommercialPricingCalculator'
 import { Activity } from 'lucide-react'
 
 const ACCENT = '#06A59A'
@@ -108,15 +110,7 @@ export default function VitalXPage() {
                 />
               )}
               {govTab === 'pricing' && (
-                <div className="flex items-center justify-center py-24">
-                  <div className="text-center">
-                    <div className="w-14 h-14 rounded-full bg-[#374151] flex items-center justify-center mx-auto mb-4">
-                      <span className="text-2xl">💰</span>
-                    </div>
-                    <h2 className="text-white font-semibold mb-2">Government Pricing Calculator</h2>
-                    <p className="text-gray-400 text-sm">CLIN-based government pricing calculator — coming in Phase 5.</p>
-                  </div>
-                </div>
+                <GovPricingCalculator entity="vitalx" accentColor={ACCENT} />
               )}
             </main>
           </>
@@ -148,15 +142,7 @@ export default function VitalXPage() {
                 />
               )}
               {commercialTab === 'pricing' && (
-                <div className="flex items-center justify-center py-24">
-                  <div className="text-center">
-                    <div className="w-14 h-14 rounded-full bg-[#374151] flex items-center justify-center mx-auto mb-4">
-                      <span className="text-2xl">💰</span>
-                    </div>
-                    <h2 className="text-white font-semibold mb-2">Commercial Pricing Calculator</h2>
-                    <p className="text-gray-400 text-sm">Commercial pricing calculator — coming in Phase 5.</p>
-                  </div>
-                </div>
+                <CommercialPricingCalculator accentColor={ACCENT} />
               )}
             </main>
           </>

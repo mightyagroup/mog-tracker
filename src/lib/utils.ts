@@ -5,38 +5,73 @@ import { ENTITY_NAICS } from './constants'
 export function calculateFitScore(lead: Partial<GovLead>, entity: EntityType): number {
   let score = 0
 
-  // NAICS match (0–30 points)
-  const entityNaics = ENTITY_NAICS[entity]
-  if (lead.naics_code && entityNaics.includes(lead.naics_code)) score += 30
-
-  // Set-aside match (0–25 points)
-  if (lead.set_aside === 'wosb' || lead.set_aside === 'edwosb') score += 25
-  else if (lead.set_aside === 'small_business' || lead.set_aside === 'total_small_business') score += 15
+  // Set-aside match (0–35 points) — WOSB/EDWOSB is top priority (Exousia + VitalX are WOSB-certified)
+  if (lead.set_aside === 'wosb' || lead.set_aside === 'edwosb') score += 35
+  else if (lead.set_aside === 'small_business' || lead.set_aside === 'total_small_business') score += 22
+  else if (lead.set_aside === 'sole_source') score += 12
   else if (lead.set_aside === 'full_and_open') score += 5
 
-  // Value range (0–15 points) — sweet spot $50K–$500K
-  const val = lead.estimated_value ?? 0
-  if (val >= 50_000 && val <= 500_000) score += 15
-  else if (val > 500_000 && val <= 2_000_000) score += 10
-  else if (val > 0 && val < 50_000) score += 5
+  // NAICS match (0–25 points) — primary code required
+  const entityNaics = ENTITY_NAICS[entity]
+  if (lead.naics_code && entityNaics.includes(lead.naics_code)) score += 25
 
-  // Location match (0–15 points) — DMV area
+  // Location (0–20 points) — local competition is lower; proximity matters
   const loc = (lead.place_of_performance ?? '').toLowerCase()
   if (
-    loc.includes('virginia') || loc.includes(' va ') || loc.includes(', va') ||
+    loc.includes('spotsylvania') || loc.includes('fredericksburg') || loc.includes('stafford') ||
+    loc.includes('prince william') || loc.includes('fairfax') || loc.includes('loudoun') ||
+    loc.includes('arlington') || loc.includes('alexandria')
+  ) score += 20
+  else if (loc.includes('virginia') || loc.includes(' va ') || loc.includes(', va') || loc.includes('va,')) score += 16
+  else if (
     loc.includes('maryland') || loc.includes(' md ') || loc.includes(', md') ||
-    loc.includes('district of columbia') || loc.includes(' dc') || loc.includes('washington')
-  ) score += 15
+    loc.includes('district of columbia') || loc.includes(' dc') || loc.includes('washington, d')
+  ) score += 12
+  else if (loc.includes('nationwide') || loc.includes('remote') || loc.includes('multiple') || loc === '') score += 8
 
-  // Time to respond (0–15 points)
+  // Value range (0–15 points) — sweet spot $25K–$750K
+  const val = lead.estimated_value ?? 0
+  if (val >= 25_000 && val <= 750_000) score += 15
+  else if (val > 750_000 && val <= 2_000_000) score += 10
+  else if (val > 0 && val < 25_000) score += 3
+
+  // Time to respond (0–5 points)
   if (lead.response_deadline) {
     const daysLeft = differenceInDays(parseISO(lead.response_deadline), new Date())
-    if (daysLeft >= 14) score += 15
-    else if (daysLeft >= 7) score += 10
-    else if (daysLeft >= 3) score += 5
+    if (daysLeft >= 14) score += 5
+    else if (daysLeft >= 7) score += 3
+    else if (daysLeft >= 3) score += 1
   }
 
   return Math.min(score, 100)
+}
+
+/**
+ * Returns true if the lead does NOT meet at least 2 of 4 quality criteria.
+ * Low-fit leads are hidden by default in the table.
+ */
+export function isLowFit(lead: Partial<GovLead>, entity: EntityType): boolean {
+  let criteria = 0
+  const entityNaics = ENTITY_NAICS[entity]
+
+  // 1. Set-aside targets WOSB / small business
+  if (['wosb', 'edwosb', 'small_business', 'total_small_business'].includes(lead.set_aside ?? '')) criteria++
+
+  // 2. Value in target range
+  const val = lead.estimated_value ?? 0
+  if (val >= 25_000 && val <= 750_000) criteria++
+
+  // 3. Place of performance is in target region (VA/MD/DC/remote)
+  const loc = (lead.place_of_performance ?? '').toLowerCase()
+  if (
+    loc.includes('virginia') || loc.includes('maryland') || loc.includes('dc') ||
+    loc.includes('washington') || loc.includes('remote') || loc.includes('nationwide') || loc === ''
+  ) criteria++
+
+  // 4. NAICS is a primary code for this entity
+  if (lead.naics_code && entityNaics.includes(lead.naics_code)) criteria++
+
+  return criteria < 2
 }
 
 export function formatCurrency(amount: number | null | undefined): string {

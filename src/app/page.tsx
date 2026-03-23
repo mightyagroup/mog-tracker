@@ -2,7 +2,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Sidebar } from '@/components/layout/Sidebar'
-import { Shield, Activity, Building2, TrendingUp, Clock, FileText, LucideIcon } from 'lucide-react'
+import { Shield, Activity, Building2, TrendingUp, Clock, FileText, LucideIcon, Users, MessageSquare } from 'lucide-react'
 
 export default async function CommandCenterPage() {
   const supabase = await createServerSupabaseClient()
@@ -10,14 +10,16 @@ export default async function CommandCenterPage() {
   if (!user) redirect('/login')
 
   // Fetch pipeline counts per entity
-  const [exousiaRes, vitalxRes, ironhouseRes] = await Promise.all([
-    supabase.from('gov_leads').select('id, status, estimated_value, response_deadline').eq('entity', 'exousia'),
-    supabase.from('gov_leads').select('id, status, estimated_value, response_deadline').eq('entity', 'vitalx'),
-    supabase.from('gov_leads').select('id, status, estimated_value, response_deadline').eq('entity', 'ironhouse'),
+  const [exousiaRes, vitalxRes, ironhouseRes, interactionsRes, contactsRes] = await Promise.all([
+    supabase.from('gov_leads').select('id, status, estimated_value, response_deadline, title, entity').eq('entity', 'exousia'),
+    supabase.from('gov_leads').select('id, status, estimated_value, response_deadline, title, entity').eq('entity', 'vitalx'),
+    supabase.from('gov_leads').select('id, status, estimated_value, response_deadline, title, entity').eq('entity', 'ironhouse'),
+    supabase.from('interactions').select('id, interaction_date, interaction_type, subject, notes, entity, gov_lead_id').order('created_at', { ascending: false }).limit(10),
+    supabase.from('contacts').select('id', { count: 'exact', head: true }),
   ])
 
   const entities = [
-    { key: 'exousia',   name: 'Exousia Solutions',  accent: '#D4AF37', icon: Shield,    href: '/exousia',   leads: exousiaRes.data ?? [],   sub: 'Cybersecurity · Facilities · Gov Contracting' },
+    { key: 'exousia',   name: 'Exousia Solutions',  accent: '#D4AF37', icon: Shield,    href: '/exousia',   leads: exousiaRes.data ?? [],   sub: 'Facilities Mgmt · Procurement · Gov Contracting' },
     { key: 'vitalx',    name: 'VitalX',              accent: '#06A59A', icon: Activity,  href: '/vitalx',    leads: vitalxRes.data ?? [],    sub: 'Healthcare Logistics · Medical Courier · DMV' },
     { key: 'ironhouse', name: 'IronHouse',            accent: '#B45309', icon: Building2, href: '/ironhouse', leads: ironhouseRes.data ?? [], sub: 'Janitorial · Landscaping · Facilities' },
   ]
@@ -26,6 +28,8 @@ export default async function CommandCenterPage() {
   const totalPipeline = allLeads.reduce((sum, l) => sum + (l.estimated_value ?? 0), 0)
   const activeBids = allLeads.filter(l => l.status === 'active_bid').length
   const awarded = allLeads.filter(l => l.status === 'awarded').length
+  const contactCount = contactsRes.count ?? 0
+  const recentActivity = interactionsRes.data ?? []
 
   // Upcoming deadlines (next 30 days) across all entities
   const now = new Date()
@@ -33,7 +37,7 @@ export default async function CommandCenterPage() {
   const upcoming = allLeads
     .filter(l => l.response_deadline && new Date(l.response_deadline) >= now && new Date(l.response_deadline) <= in30)
     .sort((a, b) => new Date(a.response_deadline!).getTime() - new Date(b.response_deadline!).getTime())
-    .slice(0, 5)
+    .slice(0, 8)
 
   return (
     <div className="flex min-h-screen bg-[#111827]">
@@ -53,6 +57,31 @@ export default async function CommandCenterPage() {
             <StatCard label="Active Bids" value={activeBids.toString()} icon={TrendingUp} color="#86efac" />
             <StatCard label="Awards" value={awarded.toString()} icon={Shield} color="#fcd34d" />
             <StatCard label="Pipeline Value" value={formatPipeline(totalPipeline)} icon={TrendingUp} color="#06A59A" />
+          </div>
+
+          {/* Quick access row */}
+          <div className="grid grid-cols-2 gap-4 mb-8">
+            <Link href="/contacts">
+              <div className="bg-[#1F2937] rounded-xl border border-[#374151] p-4 hover:border-[#4B5563] transition flex items-center gap-3 group">
+                <div className="w-9 h-9 rounded-lg bg-[#D4AF3722] flex items-center justify-center">
+                  <Users size={16} className="text-[#D4AF37]" />
+                </div>
+                <div>
+                  <div className="text-white font-medium text-sm">Master Contacts</div>
+                  <div className="text-gray-500 text-xs">{contactCount} contact{contactCount !== 1 ? 's' : ''} across all entities</div>
+                </div>
+                <span className="ml-auto text-xs text-[#D4AF37] group-hover:underline">View →</span>
+              </div>
+            </Link>
+            <div className="bg-[#1F2937] rounded-xl border border-[#374151] p-4 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-[#06A59A22] flex items-center justify-center">
+                <MessageSquare size={16} className="text-[#06A59A]" />
+              </div>
+              <div>
+                <div className="text-white font-medium text-sm">Recent Activity</div>
+                <div className="text-gray-500 text-xs">{recentActivity.length} recent interaction{recentActivity.length !== 1 ? 's' : ''}</div>
+              </div>
+            </div>
           </div>
 
           {/* Entity cards */}
@@ -102,28 +131,59 @@ export default async function CommandCenterPage() {
             })}
           </div>
 
-          {/* Upcoming deadlines */}
-          {upcoming.length > 0 && (
-            <div className="bg-[#1F2937] rounded-xl border border-[#374151] p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <Clock size={16} className="text-[#D4AF37]" />
-                <h2 className="text-white font-semibold">Upcoming Deadlines (30 days)</h2>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Upcoming deadlines */}
+            {upcoming.length > 0 && (
+              <div className="bg-[#1F2937] rounded-xl border border-[#374151] p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <Clock size={16} className="text-[#D4AF37]" />
+                  <h2 className="text-white font-semibold">Upcoming Deadlines</h2>
+                  <span className="text-gray-500 text-xs ml-auto">next 30 days</span>
+                </div>
+                <div className="space-y-2">
+                  {upcoming.map(l => {
+                    const days = Math.ceil((new Date(l.response_deadline!).getTime() - now.getTime()) / 86_400_000)
+                    const entityColors: Record<string, string> = { exousia: '#D4AF37', vitalx: '#06A59A', ironhouse: '#B45309' }
+                    return (
+                      <div key={l.id} className="flex items-center gap-3 py-2 border-b border-[#374151] last:border-0">
+                        <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: entityColors[l.entity] ?? '#6B7280' }} />
+                        <span className="text-gray-300 text-sm truncate flex-1">{l.title ?? 'Untitled'}</span>
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded flex-shrink-0 ${days < 7 ? 'bg-red-900 text-red-300' : days < 14 ? 'bg-yellow-900 text-yellow-300' : 'bg-green-900 text-green-300'}`}>
+                          {days}d
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
-              <div className="space-y-2">
-                {upcoming.map(l => {
-                  const days = Math.ceil((new Date(l.response_deadline!).getTime() - now.getTime()) / 86_400_000)
-                  return (
-                    <div key={l.id} className="flex items-center justify-between py-2 border-b border-[#374151] last:border-0">
-                      <span className="text-gray-300 text-sm truncate flex-1 mr-4">{(l as Record<string, unknown>).title as string ?? 'Untitled'}</span>
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded ${days < 7 ? 'bg-red-900 text-red-300' : days < 14 ? 'bg-yellow-900 text-yellow-300' : 'bg-green-900 text-green-300'}`}>
-                        {days}d
-                      </span>
+            )}
+
+            {/* Recent activity */}
+            {recentActivity.length > 0 && (
+              <div className="bg-[#1F2937] rounded-xl border border-[#374151] p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <MessageSquare size={16} className="text-[#06A59A]" />
+                  <h2 className="text-white font-semibold">Recent Activity</h2>
+                </div>
+                <div className="space-y-3">
+                  {recentActivity.map(i => (
+                    <div key={i.id} className="flex items-start gap-3 py-2 border-b border-[#374151] last:border-0">
+                      <div className="w-1.5 h-1.5 rounded-full bg-[#06A59A] flex-shrink-0 mt-1.5" />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-gray-500 text-xs">{i.interaction_date}</span>
+                          {i.interaction_type && <span className="text-gray-600 text-xs capitalize">· {i.interaction_type}</span>}
+                          {i.entity && <span className="text-gray-600 text-xs">· {i.entity}</span>}
+                        </div>
+                        {i.subject && i.subject !== 'Note' && <div className="text-gray-300 text-xs font-medium mt-0.5">{i.subject}</div>}
+                        {i.notes && <p className="text-gray-400 text-xs mt-0.5 truncate">{i.notes}</p>}
+                      </div>
                     </div>
-                  )
-                })}
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </main>
       </div>
     </div>

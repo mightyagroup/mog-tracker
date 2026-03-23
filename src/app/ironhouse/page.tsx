@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/layout/Sidebar'
 import { TabNav } from '@/components/tracker/TabNav'
 import { LeadsTable } from '@/components/tracker/LeadsTable'
 import { SubcontractorsTable } from '@/components/tracker/SubcontractorsTable'
+import { GovPricingCalculator } from '@/components/pricing/GovPricingCalculator'
 import { Building2 } from 'lucide-react'
 
 const ACCENT = '#B45309'
@@ -80,15 +81,7 @@ export default function IronHousePage() {
             />
           )}
           {activeTab === 'pricing' && (
-            <div className="flex items-center justify-center py-24">
-              <div className="text-center">
-                <div className="w-14 h-14 rounded-full bg-[#374151] flex items-center justify-center mx-auto mb-4">
-                  <span className="text-2xl">💰</span>
-                </div>
-                <h2 className="text-white font-semibold mb-2">Pricing Calculator</h2>
-                <p className="text-gray-400 text-sm">CLIN-based government pricing calculator — coming in Phase 5.</p>
-              </div>
-            </div>
+            <GovPricingCalculator entity="ironhouse" accentColor={ACCENT} />
           )}
         </main>
       </div>

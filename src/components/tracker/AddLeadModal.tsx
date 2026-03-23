@@ -6,7 +6,7 @@ import { GovLead, EntityType, ServiceCategory, LeadStatus, SourceType, SetAsideT
 import {
   LEAD_STATUSES, STATUS_LABELS, SET_ASIDE_LABELS, SOURCE_LABELS, CONTRACT_TYPE_LABELS,
 } from '@/lib/constants'
-import { calculateFitScore } from '@/lib/utils'
+import { calculateFitScore, isLowFit } from '@/lib/utils'
 import { Modal } from '@/components/common/Modal'
 import { FitScoreBadge } from '@/components/tracker/FitScoreBadge'
 
@@ -64,16 +64,15 @@ export function AddLeadModal({ entity, categories, onClose, onSave, defaultPropo
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  const previewScore = calculateFitScore(
-    {
-      naics_code: form.naics_code || undefined,
-      set_aside: form.set_aside,
-      estimated_value: form.estimated_value ? parseFloat(form.estimated_value) : undefined,
-      place_of_performance: form.place_of_performance || undefined,
-      response_deadline: form.response_deadline || undefined,
-    },
-    entity
-  )
+  const previewPartial = {
+    naics_code: form.naics_code || undefined,
+    set_aside: form.set_aside,
+    estimated_value: form.estimated_value ? parseFloat(form.estimated_value) : undefined,
+    place_of_performance: form.place_of_performance || undefined,
+    response_deadline: form.response_deadline || undefined,
+  }
+  const previewScore = calculateFitScore(previewPartial, entity)
+  const previewLowFit = isLowFit(previewPartial, entity)
 
   function set(field: keyof FormState, value: string) {
     setForm(f => ({ ...f, [field]: value }))
@@ -144,10 +143,14 @@ export function AddLeadModal({ entity, categories, onClose, onSave, defaultPropo
 
       <div className="space-y-6">
         {/* Fit score preview */}
-        <div className="flex items-center gap-3 px-4 py-3 bg-[#111827] rounded-lg border border-[#374151]">
+        <div className={`flex items-center gap-3 px-4 py-3 rounded-lg border ${previewLowFit ? 'bg-[#1c1008] border-amber-900/60' : 'bg-[#111827] border-[#374151]'}`}>
           <span className="text-gray-400 text-sm">Fit Score Preview:</span>
           <FitScoreBadge score={previewScore} />
-          <span className="text-gray-500 text-xs">(auto-calculated from NAICS, set-aside, value, location, deadline)</span>
+          {previewLowFit ? (
+            <span className="text-amber-400 text-xs font-medium">⚠ Low fit — meets fewer than 2 quality criteria. Will be hidden by default.</span>
+          ) : (
+            <span className="text-gray-500 text-xs">NAICS · set-aside · value · location · deadline</span>
+          )}
         </div>
 
         {/* Basic */}

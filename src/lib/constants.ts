@@ -4,7 +4,7 @@ export const ENTITY_BRANDING: Record<string, { primary: string; accent: string; 
   mog:       { primary: '#1F2937', accent: '#D4AF37', name: 'MOG Command' },
   exousia:   { primary: '#253A5E', accent: '#D4AF37', name: 'Exousia Solutions' },
   vitalx:    { primary: '#064E3B', accent: '#06A59A', name: 'VitalX' },
-  ironhouse: { primary: '#292524', accent: '#B45309', name: 'IronHouse' },
+  ironhouse: { primary: '#292524', accent: '#B45309', name: 'IronHouse Janitorial & Landscaping' },
 }
 
 export const ENTITY_NAICS: Record<EntityType, string[]> = {
@@ -55,14 +55,33 @@ export const SET_ASIDE_LABELS: Record<SetAsideType, string> = {
 }
 
 export const SOURCE_LABELS: Record<SourceType, string> = {
-  sam_gov:     'SAM.gov',
-  govwin:      'GovWin',
-  eva:         'eVA',
-  emma:        'eMMA',
-  local_gov:   'Local Gov',
-  usaspending: 'USASpending',
-  manual:      'Manual',
+  sam_gov:     'Federal (SAM.gov)',
+  govwin:      'Federal (GovWin)',
+  eva:         'VA State (eVA)',
+  emma:        'MD State (eMMA)',
+  local_gov:   'Local Government',
+  usaspending: 'Federal (USASpending)',
+  manual:      'Manual Entry',
   commercial:  'Commercial',
+}
+
+export const SOURCE_REGION: Record<SourceType, 'federal' | 'state_va' | 'state_md' | 'local' | 'manual'> = {
+  sam_gov:     'federal',
+  govwin:      'federal',
+  usaspending: 'federal',
+  eva:         'state_va',
+  emma:        'state_md',
+  local_gov:   'local',
+  manual:      'manual',
+  commercial:  'manual',
+}
+
+export const REGION_LABELS: Record<string, string> = {
+  federal:  'Federal',
+  state_va: 'VA State (eVA)',
+  state_md: 'MD State (eMMA)',
+  local:    'Local Government',
+  manual:   'Manual Entry',
 }
 
 export const CONTRACT_TYPE_LABELS: Record<ContractType, string> = {

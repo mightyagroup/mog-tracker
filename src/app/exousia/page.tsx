@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/layout/Sidebar'
 import { TabNav } from '@/components/tracker/TabNav'
 import { LeadsTable } from '@/components/tracker/LeadsTable'
 import { SubcontractorsTable } from '@/components/tracker/SubcontractorsTable'
+import { GovPricingCalculator } from '@/components/pricing/GovPricingCalculator'
 import { Shield } from 'lucide-react'
 
 const ACCENT = '#D4AF37'
@@ -35,7 +36,7 @@ export default function ExousiaPage() {
           </div>
           <div>
             <h1 className="text-white font-bold text-xl leading-tight">Exousia Solutions</h1>
-            <p className="text-gray-400 text-sm">Cybersecurity compliance · Facilities management · Government contracting</p>
+            <p className="text-gray-400 text-sm">Facilities management · Procurement · Government contracting support</p>
           </div>
           <div className="ml-auto flex items-center gap-2">
             <div className="text-xs text-gray-500 text-right">
@@ -73,15 +74,7 @@ export default function ExousiaPage() {
             />
           )}
           {activeTab === 'pricing' && (
-            <div className="flex items-center justify-center py-24">
-              <div className="text-center">
-                <div className="w-14 h-14 rounded-full bg-[#374151] flex items-center justify-center mx-auto mb-4">
-                  <span className="text-2xl">💰</span>
-                </div>
-                <h2 className="text-white font-semibold mb-2">Pricing Calculator</h2>
-                <p className="text-gray-400 text-sm">CLIN-based government pricing calculator — coming in Phase 5.</p>
-              </div>
-            </div>
+            <GovPricingCalculator entity="exousia" accentColor={ACCENT} />
           )}
         </main>
       </div>

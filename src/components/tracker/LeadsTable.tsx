@@ -5,8 +5,9 @@ import { createClient } from '@/lib/supabase/client'
 import { GovLead, ServiceCategory, EntityType, LeadStatus } from '@/lib/types'
 import {
   LEAD_STATUSES, STATUS_LABELS, STATUS_COLORS, SET_ASIDE_LABELS, SOURCE_LABELS,
+  SOURCE_REGION, REGION_LABELS,
 } from '@/lib/constants'
-import { formatCurrency, exportLeadsToCSV } from '@/lib/utils'
+import { formatCurrency, exportLeadsToCSV, isLowFit } from '@/lib/utils'
 import { StatusBadge } from './StatusBadge'
 import { CategoryBadge } from './CategoryBadge'
 import { DeadlineCountdown } from './DeadlineCountdown'
@@ -47,6 +48,8 @@ export function LeadsTable({
   const [categoryFilter, setCategoryFilter] = useState('')
   const [setAsideFilter, setSetAsideFilter] = useState('')
   const [sourceFilter, setSourceFilter] = useState('')
+  const [regionFilter, setRegionFilter] = useState('')
+  const [showLowFit, setShowLowFit] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
   const [sortField, setSortField] = useState<SortField>('created_at')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
@@ -94,6 +97,9 @@ export function LeadsTable({
   const filteredLeads = useMemo(() => {
     let result = leads
 
+    // Hide low-fit leads by default
+    if (!showLowFit) result = result.filter(l => !isLowFit(l, entity))
+
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
       result = result.filter(l =>
@@ -108,9 +114,10 @@ export function LeadsTable({
     if (categoryFilter) result = result.filter(l => l.service_category_id === categoryFilter)
     if (setAsideFilter) result = result.filter(l => l.set_aside === setAsideFilter)
     if (sourceFilter) result = result.filter(l => l.source === sourceFilter)
+    if (regionFilter) result = result.filter(l => SOURCE_REGION[l.source] === regionFilter)
 
     return result
-  }, [leads, searchQuery, statusFilters, categoryFilter, setAsideFilter, sourceFilter])
+  }, [leads, searchQuery, statusFilters, categoryFilter, setAsideFilter, sourceFilter, regionFilter, showLowFit, entity])
 
   // ── Sorting ────────────────────────────────────────────────────────────────
   const sortedLeads = useMemo(() => {
@@ -178,7 +185,8 @@ export function LeadsTable({
     else setSelectedIds(new Set(sortedLeads.map(l => l.id)))
   }
 
-  const activeFilterCount = (statusFilters.length > 0 ? 1 : 0) + (categoryFilter ? 1 : 0) + (setAsideFilter ? 1 : 0) + (sourceFilter ? 1 : 0)
+  const lowFitCount = leads.filter(l => isLowFit(l, entity)).length
+  const activeFilterCount = (statusFilters.length > 0 ? 1 : 0) + (categoryFilter ? 1 : 0) + (setAsideFilter ? 1 : 0) + (sourceFilter ? 1 : 0) + (regionFilter ? 1 : 0)
 
   if (loading) return <LoadingPage />
 
@@ -291,10 +299,16 @@ export function LeadsTable({
             onChange={setSourceFilter}
             options={[{ value: '', label: 'All Sources' }, ...Object.entries(SOURCE_LABELS).map(([v, l]) => ({ value: v, label: l }))]}
           />
+          <FilterSelect
+            label="Region"
+            value={regionFilter}
+            onChange={setRegionFilter}
+            options={[{ value: '', label: 'All Regions' }, ...Object.entries(REGION_LABELS).map(([v, l]) => ({ value: v, label: l }))]}
+          />
 
           {activeFilterCount > 0 && (
             <button
-              onClick={() => { setStatusFilters([]); setCategoryFilter(''); setSetAsideFilter(''); setSourceFilter('') }}
+              onClick={() => { setStatusFilters([]); setCategoryFilter(''); setSetAsideFilter(''); setSourceFilter(''); setRegionFilter('') }}
               className="text-xs text-red-400 hover:text-red-300 self-center"
             >
               Clear all filters
@@ -331,11 +345,28 @@ export function LeadsTable({
       )}
 
       {/* Stats row */}
-      <div className="flex items-center gap-2 mb-3">
+      <div className="flex items-center gap-3 mb-3 flex-wrap">
         <span className="text-gray-500 text-xs">
           {sortedLeads.length} {sortedLeads.length === 1 ? 'lead' : 'leads'}
           {filteredLeads.length !== leads.length && ` (${leads.length} total)`}
         </span>
+        {!showLowFit && lowFitCount > 0 && (
+          <button
+            onClick={() => setShowLowFit(true)}
+            className="text-xs text-amber-500 hover:text-amber-400 transition flex items-center gap-1"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
+            {lowFitCount} low-fit {lowFitCount === 1 ? 'lead' : 'leads'} hidden — Show all
+          </button>
+        )}
+        {showLowFit && lowFitCount > 0 && (
+          <button
+            onClick={() => setShowLowFit(false)}
+            className="text-xs text-gray-500 hover:text-gray-300 transition"
+          >
+            Hide low-fit leads ({lowFitCount})
+          </button>
+        )}
       </div>
 
       {/* Table */}

@@ -12,7 +12,7 @@ import { CategoryBadge } from './CategoryBadge'
 import { FitScoreBadge } from './FitScoreBadge'
 import { DeadlineCountdown } from './DeadlineCountdown'
 import {
-  X, ExternalLink, Edit2, Save, Check, Plus, ChevronDown, MessageSquare, Folder,
+  X, ExternalLink, Edit2, Save, Check, Plus, ChevronDown, MessageSquare, Folder, RefreshCw,
 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 
@@ -35,13 +35,51 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
   const [newNote, setNewNote] = useState('')
   const [addingNote, setAddingNote] = useState(false)
   const [activeSection, setActiveSection] = useState<'details' | 'compliance' | 'interactions'>('details')
+  const [usaLoading, setUsaLoading] = useState(false)
+  const [usaData, setUsaData] = useState<{ found: boolean; previous_award_total?: number; incumbent_contractor?: string; award_history_notes?: string } | null>(null)
 
   useEffect(() => {
     setForm({ ...lead })
     setEditMode(false)
+    setUsaData(null)
     loadCompliance()
     loadInteractions()
+    // Auto-lookup if lead has a solicitation number or NAICS + agency
+    if (lead.solicitation_number || (lead.naics_code && lead.agency)) {
+      lookupUSASpending(lead)
+    }
   }, [lead.id])
+
+  async function lookupUSASpending(target: Partial<typeof lead> = lead) {
+    setUsaLoading(true)
+    try {
+      const res = await fetch('/api/usaspending', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          solicitation_number: target.solicitation_number,
+          naics_code: target.naics_code,
+          agency: target.agency,
+        }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setUsaData(data)
+        // Auto-populate fields if not already set and data was found
+        if (data.found) {
+          setForm(f => ({
+            ...f,
+            previous_award_total: f.previous_award_total ?? data.previous_award_total,
+            incumbent_contractor: f.incumbent_contractor ?? data.incumbent_contractor,
+            award_history_notes: f.award_history_notes ?? data.award_history_notes,
+          }))
+        }
+      }
+    } catch {
+      // Silently fail — lookup is best-effort
+    }
+    setUsaLoading(false)
+  }
 
   async function loadCompliance() {
     setLoadingCompliance(true)
@@ -327,7 +365,28 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
 
               {/* Financials */}
               <div>
-                <SectionLabel>Financials</SectionLabel>
+                <div className="flex items-center justify-between mb-3">
+                  <SectionLabel>Financials &amp; Prior Awards</SectionLabel>
+                  <button
+                    onClick={() => lookupUSASpending(form)}
+                    disabled={usaLoading}
+                    className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition disabled:opacity-50"
+                    title="Lookup prior award data from USASpending.gov"
+                  >
+                    <RefreshCw size={12} className={usaLoading ? 'animate-spin' : ''} />
+                    {usaLoading ? 'Looking up…' : 'USASpending lookup'}
+                  </button>
+                </div>
+
+                {/* USASpending result banner */}
+                {usaData && !usaLoading && (
+                  <div className={`mb-3 px-3 py-2 rounded-lg text-xs border ${usaData.found ? 'bg-[#052e16] border-green-900 text-green-300' : 'bg-[#1F2937] border-[#374151] text-gray-500'}`}>
+                    {usaData.found
+                      ? `✓ Prior award data found on USASpending.gov — fields auto-populated below.`
+                      : 'No prior award data found on USASpending.gov. You can enter it manually.'}
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-4">
                   {editMode ? (
                     <>
@@ -340,11 +399,23 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                     <>
                       <InfoRow label="Estimated Value" value={formatFullCurrency(lead.estimated_value)} />
                       <InfoRow label="Award Amount" value={formatFullCurrency(lead.award_amount)} />
-                      <InfoRow label="Previous Award Total" value={formatFullCurrency(lead.previous_award_total)} />
-                      <InfoRow label="Incumbent" value={lead.incumbent_contractor} />
+                      <InfoRow label="Previous Award Total" value={formatFullCurrency(form.previous_award_total ?? lead.previous_award_total)} />
+                      <InfoRow label="Incumbent" value={form.incumbent_contractor ?? lead.incumbent_contractor} />
                     </>
                   )}
                 </div>
+                {(form.award_history_notes ?? lead.award_history_notes) && !editMode && (
+                  <div className="mt-3">
+                    <div className={labelCls}>Award History</div>
+                    <p className="text-gray-300 text-xs whitespace-pre-wrap leading-relaxed">{form.award_history_notes ?? lead.award_history_notes}</p>
+                  </div>
+                )}
+                {editMode && (
+                  <div className="mt-3">
+                    <label className={labelCls}>Award History Notes</label>
+                    <textarea className={`${selectCls} resize-none text-xs`} rows={3} value={form.award_history_notes ?? ''} onChange={e => setForm(f => ({ ...f, award_history_notes: e.target.value }))} />
+                  </div>
+                )}
               </div>
 
               {/* Links */}

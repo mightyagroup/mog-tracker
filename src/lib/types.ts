@@ -126,6 +126,24 @@ export interface CommercialLead {
   updated_at: string
 }
 
+export interface Contact {
+  id: string
+  first_name: string
+  last_name: string
+  title?: string | null
+  organization?: string | null
+  email?: string | null
+  phone?: string | null
+  linkedin?: string | null
+  contact_type?: string | null
+  entities_associated?: EntityType[] | null
+  last_contact_date?: string | null
+  next_follow_up?: string | null
+  relationship_notes?: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface Subcontractor {
   id: string
   company_name: string
