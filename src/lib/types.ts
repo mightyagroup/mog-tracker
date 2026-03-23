@@ -122,6 +122,8 @@ export interface CommercialLead {
   proposal_url?: string | null
   drive_folder_url?: string | null
   notes?: string | null
+  fit_score: number
+  volume_tier?: string | null
   created_at: string
   updated_at: string
 }

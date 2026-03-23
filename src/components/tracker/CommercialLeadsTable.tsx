@@ -38,7 +38,7 @@ export function CommercialLeadsTable({ presetStatuses, title, accentColor = '#06
   async function fetchLeads() {
     setLoading(true)
     const supabase = createClient()
-    let q = supabase.from('commercial_leads').select('*').eq('entity', ENTITY).order('created_at', { ascending: false })
+    let q = supabase.from('commercial_leads').select('*').eq('entity', ENTITY).order('fit_score', { ascending: false })
     if (presetStatuses?.length) q = q.in('status', presetStatuses)
     const { data } = await q
     setLeads((data ?? []) as CommercialLead[])
@@ -139,6 +139,7 @@ export function CommercialLeadsTable({ presetStatuses, title, accentColor = '#06
                 <tr className="border-b border-[#374151] bg-[#161E2E]">
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Organization</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Contact</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Fit</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Status</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Category</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Est. Value/yr</th>
@@ -160,6 +161,9 @@ export function CommercialLeadsTable({ presetStatuses, title, accentColor = '#06
                     <td className="px-4 py-3 text-gray-300">
                       <div className="truncate max-w-[140px]">{lead.contact_name ?? '—'}</div>
                       {lead.contact_title && <div className="text-gray-500 text-xs truncate">{lead.contact_title}</div>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <CommercialFitBadge score={lead.fit_score} />
                     </td>
                     <td className="px-4 py-3">
                       <InlineStatusSelect lead={lead} onChange={s => handleInlineStatus(lead.id, s)} accentColor={accentColor} />
@@ -213,6 +217,18 @@ export function CommercialLeadsTable({ presetStatuses, title, accentColor = '#06
     setLeads(prev => prev.map(l => l.id === id ? { ...l, status } : l))
     if (selectedLead?.id === id) setSelectedLead(prev => prev ? { ...prev, status } : null)
   }
+}
+
+// ── Commercial fit score badge ───────────────────────────────────────────────
+function CommercialFitBadge({ score }: { score: number }) {
+  const color = score >= 80 ? '#4ADE80' : score >= 65 ? '#FCD34D' : score >= 45 ? '#FB923C' : '#9CA3AF'
+  const bg = score >= 80 ? '#4ADE8022' : score >= 65 ? '#FCD34D22' : score >= 45 ? '#FB923C22' : '#9CA3AF22'
+  if (!score) return <span className="text-gray-600 text-xs">—</span>
+  return (
+    <span className="inline-flex items-center text-xs font-bold px-2 py-0.5 rounded-full" style={{ color, backgroundColor: bg }}>
+      {score}
+    </span>
+  )
 }
 
 // ── Inline status cell ──────────────────────────────────────────────────────

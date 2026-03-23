@@ -125,6 +125,10 @@ export const VITALX_COMMERCIAL_CATEGORIES = [
   'Pharmacy/Specialty',
   'Home Health',
   'NEMT Brokers',
+  'Urgent Care/Outpatient',
+  'Blood Banks',
+  'VA/Military Healthcare',
+  'DNA/Drug Testing',
 ]
 
 export const OUTREACH_METHODS = [
