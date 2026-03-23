@@ -2,27 +2,52 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Sidebar } from '@/components/layout/Sidebar'
-import { Shield, Activity, Building2, TrendingUp, Clock, FileText, LucideIcon, Users, MessageSquare, CalendarCheck, AlertTriangle } from 'lucide-react'
+import { QuickActionsBar } from '@/components/dashboard/QuickActionsBar'
+import { SOURCE_LABELS } from '@/lib/constants'
+import { SourceType } from '@/lib/types'
+import {
+  Shield, Activity, Building2, TrendingUp, Clock, FileText,
+  LucideIcon, Users, MessageSquare, CalendarCheck, AlertTriangle,
+} from 'lucide-react'
+
+const ENTITY_COLORS: Record<string, string> = {
+  exousia: '#D4AF37',
+  vitalx:  '#06A59A',
+  ironhouse: '#B45309',
+}
+
+const SOURCE_COLORS: Record<string, string> = {
+  sam_gov:     '#3B82F6',
+  govwin:      '#6366F1',
+  eva:         '#8B5CF6',
+  emma:        '#EC4899',
+  local_gov:   '#F59E0B',
+  usaspending: '#06B6D4',
+  manual:      '#6B7280',
+  commercial:  '#10B981',
+}
 
 export default async function CommandCenterPage() {
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // Fetch pipeline counts per entity
-  const [exousiaRes, vitalxRes, ironhouseRes, interactionsRes, contactsRes, complianceRes] = await Promise.all([
-    supabase.from('gov_leads').select('id, status, estimated_value, response_deadline, title, entity').eq('entity', 'exousia'),
-    supabase.from('gov_leads').select('id, status, estimated_value, response_deadline, title, entity').eq('entity', 'vitalx'),
-    supabase.from('gov_leads').select('id, status, estimated_value, response_deadline, title, entity').eq('entity', 'ironhouse'),
-    supabase.from('interactions').select('id, interaction_date, interaction_type, subject, notes, entity, gov_lead_id').order('created_at', { ascending: false }).limit(10),
+  const now = new Date()
+
+  const [exousiaRes, vitalxRes, ironhouseRes, interactionsRes, contactsRes, complianceRes, categoriesRes] = await Promise.all([
+    supabase.from('gov_leads').select('id, status, estimated_value, response_deadline, title, entity, source, service_category_id').eq('entity', 'exousia'),
+    supabase.from('gov_leads').select('id, status, estimated_value, response_deadline, title, entity, source, service_category_id').eq('entity', 'vitalx'),
+    supabase.from('gov_leads').select('id, status, estimated_value, response_deadline, title, entity, source, service_category_id').eq('entity', 'ironhouse'),
+    supabase.from('interactions').select('id, interaction_date, interaction_type, subject, notes, entity').order('created_at', { ascending: false }).limit(10),
     supabase.from('contacts').select('id', { count: 'exact', head: true }),
     supabase.from('compliance_records').select('id, name, entity, record_type, expiration_date, cancellation_deadline, monthly_cost'),
+    supabase.from('service_categories').select('id, entity, name, color').order('sort_order'),
   ])
 
   const entities = [
-    { key: 'exousia',   name: 'Exousia Solutions',  accent: '#D4AF37', icon: Shield,    href: '/exousia',   leads: exousiaRes.data ?? [],   sub: 'Facilities Mgmt · Procurement · Gov Contracting' },
-    { key: 'vitalx',    name: 'VitalX',              accent: '#06A59A', icon: Activity,  href: '/vitalx',    leads: vitalxRes.data ?? [],    sub: 'Healthcare Logistics · Medical Courier · DMV' },
-    { key: 'ironhouse', name: 'IronHouse',            accent: '#B45309', icon: Building2, href: '/ironhouse', leads: ironhouseRes.data ?? [], sub: 'Janitorial · Landscaping · Facilities' },
+    { key: 'exousia',   name: 'Exousia Solutions', accent: '#D4AF37', icon: Shield,    href: '/exousia',   leads: exousiaRes.data ?? [],   sub: 'Facilities Mgmt · Procurement · Gov Contracting' },
+    { key: 'vitalx',    name: 'VitalX',             accent: '#06A59A', icon: Activity,  href: '/vitalx',    leads: vitalxRes.data ?? [],    sub: 'Healthcare Logistics · Medical Courier · DMV' },
+    { key: 'ironhouse', name: 'IronHouse',           accent: '#B45309', icon: Building2, href: '/ironhouse', leads: ironhouseRes.data ?? [], sub: 'Janitorial · Landscaping · Facilities' },
   ]
 
   const allLeads = [...(exousiaRes.data ?? []), ...(vitalxRes.data ?? []), ...(ironhouseRes.data ?? [])]
@@ -32,7 +57,7 @@ export default async function CommandCenterPage() {
   const contactCount = contactsRes.count ?? 0
   const recentActivity = interactionsRes.data ?? []
 
-  // Compliance: upcoming renewals in 30 days + monthly spend
+  // ── Compliance ────────────────────────────────────────────────────────────
   const complianceRecords = complianceRes.data ?? []
   const complianceUpcoming = complianceRecords
     .filter(r => {
@@ -51,20 +76,45 @@ export default async function CommandCenterPage() {
     .filter(r => r.record_type === 'subscription' && r.monthly_cost)
     .reduce((s: number, r) => s + (r.monthly_cost ?? 0), 0)
 
-  // Upcoming deadlines (next 30 days) across all entities
-  const now = new Date()
-  const in30 = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
-  const upcoming = allLeads
-    .filter(l => l.response_deadline && new Date(l.response_deadline) >= now && new Date(l.response_deadline) <= in30)
-    .sort((a, b) => new Date(a.response_deadline!).getTime() - new Date(b.response_deadline!).getTime())
-    .slice(0, 8)
+  // ── Deadline calendar (current month) ─────────────────────────────────────
+  const calMonth = now.getMonth()
+  const calYear = now.getFullYear()
+  const calDeadlines = allLeads
+    .filter(l => l.response_deadline)
+    .map(l => {
+      const d = new Date(l.response_deadline!)
+      return { day: d.getDate(), month: d.getMonth(), year: d.getFullYear(), entity: l.entity as string, title: (l.title ?? 'Untitled') as string }
+    })
+    .filter(d => d.month === calMonth && d.year === calYear)
+
+  // ── Category breakdown ────────────────────────────────────────────────────
+  const allCategories = categoriesRes.data ?? []
+  const catCounts: Record<string, { name: string; color: string; count: number }> = {}
+  for (const lead of allLeads) {
+    if (lead.service_category_id) {
+      const cat = allCategories.find(c => c.id === lead.service_category_id)
+      if (cat) {
+        catCounts[cat.name] = catCounts[cat.name] ?? { name: cat.name, color: cat.color, count: 0 }
+        catCounts[cat.name].count++
+      }
+    }
+  }
+  const categoryBreakdown = Object.values(catCounts).sort((a, b) => b.count - a.count).slice(0, 8)
+
+  // ── Source breakdown ──────────────────────────────────────────────────────
+  const sourceCounts: Record<string, number> = {}
+  for (const lead of allLeads) {
+    if (lead.source) sourceCounts[lead.source] = (sourceCounts[lead.source] ?? 0) + 1
+  }
+  const sourceBreakdown = Object.entries(sourceCounts)
+    .map(([source, count]) => ({ source, count, label: SOURCE_LABELS[source as SourceType] ?? source }))
+    .sort((a, b) => b.count - a.count)
 
   return (
     <div className="flex min-h-screen bg-[#111827]">
       <Sidebar />
 
       <div className="flex-1 flex flex-col min-w-0 pt-14 lg:pt-0">
-        {/* Header */}
         <header className="px-6 py-5 border-b border-[#374151] bg-[#1A2233]">
           <h1 className="text-white font-bold text-xl">MOG Command Center</h1>
           <p className="text-gray-400 text-sm mt-0.5">Pipeline overview across all Mighty Oak Group entities</p>
@@ -72,14 +122,17 @@ export default async function CommandCenterPage() {
 
         <main className="flex-1 p-6 overflow-auto">
           {/* Aggregate stats */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <StatCard label="Total Leads" value={allLeads.length.toString()} icon={FileText} />
-            <StatCard label="Active Bids" value={activeBids.toString()} icon={TrendingUp} color="#86efac" />
-            <StatCard label="Awards" value={awarded.toString()} icon={Shield} color="#fcd34d" />
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <StatCard label="Total Leads"    value={allLeads.length.toString()} icon={FileText} />
+            <StatCard label="Active Bids"    value={activeBids.toString()}      icon={TrendingUp} color="#86efac" />
+            <StatCard label="Awards"         value={awarded.toString()}          icon={Shield}    color="#fcd34d" />
             <StatCard label="Pipeline Value" value={formatPipeline(totalPipeline)} icon={TrendingUp} color="#06A59A" />
           </div>
 
-          {/* Quick access row */}
+          {/* Quick actions */}
+          <QuickActionsBar />
+
+          {/* Quick access cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
             <Link href="/contacts">
               <div className="bg-[#1F2937] rounded-xl border border-[#374151] p-4 hover:border-[#4B5563] transition flex items-center gap-3 group">
@@ -101,11 +154,9 @@ export default async function CommandCenterPage() {
                 <div className="min-w-0">
                   <div className="text-white font-medium text-sm">Compliance</div>
                   <div className="text-gray-500 text-xs">
-                    {complianceUpcoming.length > 0 ? (
-                      <span className="text-yellow-400">{complianceUpcoming.length} due in 30d</span>
-                    ) : (
-                      <span>${totalMonthlySpend.toFixed(0)}/mo subscriptions</span>
-                    )}
+                    {complianceUpcoming.length > 0
+                      ? <span className="text-yellow-400">{complianceUpcoming.length} due in 30d</span>
+                      : <span>${totalMonthlySpend.toFixed(0)}/mo subscriptions</span>}
                   </div>
                 </div>
                 <span className="ml-auto text-xs text-[#D4AF37] group-hover:underline flex-shrink-0">View →</span>
@@ -181,12 +232,11 @@ export default async function CommandCenterPage() {
                 {complianceUpcoming.map((r: { id: string; name: string; entity: string; record_type: string; expiration_date?: string | null; cancellation_deadline?: string | null; monthly_cost?: number | null }) => {
                   const d = r.expiration_date ?? r.cancellation_deadline
                   const days = d ? Math.ceil((new Date(d).getTime() - now.getTime()) / 86_400_000) : null
-                  const entityColors: Record<string, string> = { exousia: '#D4AF37', vitalx: '#06A59A', ironhouse: '#B45309' }
                   const dColor = days !== null && days <= 7 ? '#FCA5A5' : '#FCD34D'
                   return (
                     <div key={r.id} className="flex items-center justify-between px-5 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: entityColors[r.entity] ?? '#6B7280' }} />
+                        <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: ENTITY_COLORS[r.entity] ?? '#6B7280' }} />
                         <div>
                           <div className="text-gray-200 text-sm">{r.name}</div>
                           <div className="text-gray-500 text-xs capitalize">{r.entity} · {r.record_type}{r.monthly_cost ? ` · $${r.monthly_cost}/mo` : ''}</div>
@@ -203,65 +253,216 @@ export default async function CommandCenterPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Upcoming deadlines */}
-            {upcoming.length > 0 && (
-              <div className="bg-[#1F2937] rounded-xl border border-[#374151] p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <Clock size={16} className="text-[#D4AF37]" />
-                  <h2 className="text-white font-semibold">Upcoming Deadlines</h2>
-                  <span className="text-gray-500 text-xs ml-auto">next 30 days</span>
-                </div>
-                <div className="space-y-2">
-                  {upcoming.map(l => {
-                    const days = Math.ceil((new Date(l.response_deadline!).getTime() - now.getTime()) / 86_400_000)
-                    const entityColors: Record<string, string> = { exousia: '#D4AF37', vitalx: '#06A59A', ironhouse: '#B45309' }
-                    return (
-                      <div key={l.id} className="flex items-center gap-3 py-2 border-b border-[#374151] last:border-0">
-                        <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: entityColors[l.entity] ?? '#6B7280' }} />
-                        <span className="text-gray-300 text-sm truncate flex-1">{l.title ?? 'Untitled'}</span>
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded flex-shrink-0 ${days < 7 ? 'bg-red-900 text-red-300' : days < 14 ? 'bg-yellow-900 text-yellow-300' : 'bg-green-900 text-green-300'}`}>
-                          {days}d
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Recent activity */}
-            {recentActivity.length > 0 && (
-              <div className="bg-[#1F2937] rounded-xl border border-[#374151] p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <MessageSquare size={16} className="text-[#06A59A]" />
-                  <h2 className="text-white font-semibold">Recent Activity</h2>
-                </div>
-                <div className="space-y-3">
-                  {recentActivity.map(i => (
-                    <div key={i.id} className="flex items-start gap-3 py-2 border-b border-[#374151] last:border-0">
-                      <div className="w-1.5 h-1.5 rounded-full bg-[#06A59A] flex-shrink-0 mt-1.5" />
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-gray-500 text-xs">{i.interaction_date}</span>
-                          {i.interaction_type && <span className="text-gray-600 text-xs capitalize">· {i.interaction_type}</span>}
-                          {i.entity && <span className="text-gray-600 text-xs">· {i.entity}</span>}
-                        </div>
-                        {i.subject && i.subject !== 'Note' && <div className="text-gray-300 text-xs font-medium mt-0.5">{i.subject}</div>}
-                        {i.notes && <p className="text-gray-400 text-xs mt-0.5 truncate">{i.notes}</p>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+          {/* Calendar + breakdowns */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <DeadlineCalendar
+              year={calYear}
+              month={calMonth}
+              deadlines={calDeadlines}
+              today={now.getDate()}
+            />
+            <div className="space-y-4">
+              <CategoryBreakdown categories={categoryBreakdown} />
+              <SourceBreakdown sources={sourceBreakdown} />
+            </div>
           </div>
+
+          {/* Recent activity */}
+          {recentActivity.length > 0 && (
+            <div className="bg-[#1F2937] rounded-xl border border-[#374151] p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <MessageSquare size={16} className="text-[#06A59A]" />
+                <h2 className="text-white font-semibold">Recent Activity</h2>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
+                {recentActivity.map(i => (
+                  <div key={i.id} className="flex items-start gap-3 py-2 border-b border-[#374151] last:border-0">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#06A59A] flex-shrink-0 mt-1.5" />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-gray-500 text-xs">{i.interaction_date}</span>
+                        {i.interaction_type && <span className="text-gray-600 text-xs capitalize">· {i.interaction_type}</span>}
+                        {i.entity && <span className="text-gray-600 text-xs">· {i.entity}</span>}
+                      </div>
+                      {i.subject && i.subject !== 'Note' && <div className="text-gray-300 text-xs font-medium mt-0.5">{i.subject}</div>}
+                      {i.notes && <p className="text-gray-400 text-xs mt-0.5 truncate">{i.notes}</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </main>
       </div>
     </div>
   )
 }
 
+// ── Visual Deadline Calendar ──────────────────────────────────────────────────
+function DeadlineCalendar({
+  year, month, deadlines, today,
+}: {
+  year: number
+  month: number
+  deadlines: { day: number; entity: string; title: string }[]
+  today: number
+}) {
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const firstDayOfWeek = new Date(year, month, 1).getDay()
+  const monthName = new Date(year, month, 1).toLocaleString('en-US', { month: 'long' })
+  const DAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+  // Group deadlines by day
+  const byDay: Record<number, { entity: string; title: string }[]> = {}
+  for (const d of deadlines) {
+    byDay[d.day] = byDay[d.day] ?? []
+    byDay[d.day].push(d)
+  }
+
+  // Build flat array of cells: null = empty padding, number = day
+  const cells: (number | null)[] = [
+    ...Array(firstDayOfWeek).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ]
+
+  return (
+    <div className="bg-[#1F2937] rounded-xl border border-[#374151] p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <Clock size={15} className="text-[#D4AF37]" />
+        <h2 className="text-white font-semibold text-sm">Deadline Calendar</h2>
+        <span className="text-gray-500 text-xs ml-auto">{monthName} {year}</span>
+      </div>
+
+      {/* Day-of-week headers */}
+      <div className="grid grid-cols-7 mb-1">
+        {DAY_HEADERS.map(d => (
+          <div key={d} className="text-center text-xs text-gray-600 py-1 font-medium">{d}</div>
+        ))}
+      </div>
+
+      {/* Day cells */}
+      <div className="grid grid-cols-7 gap-0.5">
+        {cells.map((day, i) => {
+          if (!day) return <div key={`empty-${i}`} className="h-9" />
+          const dl = byDay[day] ?? []
+          const isToday = day === today
+          return (
+            <div
+              key={day}
+              className={`h-9 rounded-lg p-1 relative ${
+                isToday
+                  ? 'ring-1 ring-[#D4AF37] bg-[#D4AF3712]'
+                  : dl.length > 0
+                  ? 'bg-[#1A2B3C]'
+                  : ''
+              }`}
+            >
+              <div className={`text-xs leading-none ${isToday ? 'text-[#D4AF37] font-bold' : 'text-gray-500'}`}>
+                {day}
+              </div>
+              {dl.length > 0 && (
+                <div className="flex flex-wrap gap-0.5 mt-0.5">
+                  {dl.slice(0, 4).map((d, j) => (
+                    <span
+                      key={j}
+                      className="w-1.5 h-1.5 rounded-full block"
+                      style={{ backgroundColor: ENTITY_COLORS[d.entity] ?? '#6B7280' }}
+                      title={`${d.entity}: ${d.title}`}
+                    />
+                  ))}
+                  {dl.length > 4 && <span className="text-gray-600 text-[9px] leading-none">+{dl.length - 4}</span>}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-4 mt-4 pt-3 border-t border-[#374151] flex-wrap">
+        {Object.entries(ENTITY_COLORS).map(([entity, color]) => (
+          <div key={entity} className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full block" style={{ backgroundColor: color }} />
+            <span className="text-xs text-gray-500 capitalize">{entity}</span>
+          </div>
+        ))}
+        {deadlines.length === 0 && (
+          <span className="text-gray-600 text-xs">No deadlines this month</span>
+        )}
+        {deadlines.length > 0 && (
+          <span className="text-gray-600 text-xs ml-auto">{deadlines.length} deadline{deadlines.length !== 1 ? 's' : ''} this month</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Category Breakdown ────────────────────────────────────────────────────────
+function CategoryBreakdown({ categories }: { categories: { name: string; color: string; count: number }[] }) {
+  const max = Math.max(...categories.map(c => c.count), 1)
+  return (
+    <div className="bg-[#1F2937] rounded-xl border border-[#374151] p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <h2 className="text-white font-semibold text-sm">By Service Category</h2>
+        <span className="text-gray-500 text-xs ml-auto">{categories.length} categories</span>
+      </div>
+      {categories.length === 0 ? (
+        <p className="text-gray-600 text-sm py-2">No categorized leads yet</p>
+      ) : (
+        <div className="space-y-2.5">
+          {categories.map(c => (
+            <div key={c.name}>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-gray-300 text-xs truncate flex-1 mr-2">{c.name}</span>
+                <span className="text-gray-500 text-xs tabular-nums flex-shrink-0">{c.count}</span>
+              </div>
+              <div className="h-1.5 bg-[#374151] rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full"
+                  style={{ width: `${(c.count / max) * 100}%`, backgroundColor: c.color }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Source Breakdown ──────────────────────────────────────────────────────────
+function SourceBreakdown({ sources }: { sources: { source: string; label: string; count: number }[] }) {
+  const max = Math.max(...sources.map(s => s.count), 1)
+  return (
+    <div className="bg-[#1F2937] rounded-xl border border-[#374151] p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <h2 className="text-white font-semibold text-sm">By Source</h2>
+      </div>
+      {sources.length === 0 ? (
+        <p className="text-gray-600 text-sm py-2">No leads yet</p>
+      ) : (
+        <div className="space-y-2.5">
+          {sources.map(s => (
+            <div key={s.source}>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-gray-300 text-xs truncate flex-1 mr-2">{s.label}</span>
+                <span className="text-gray-500 text-xs tabular-nums flex-shrink-0">{s.count}</span>
+              </div>
+              <div className="h-1.5 bg-[#374151] rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full"
+                  style={{ width: `${(s.count / max) * 100}%`, backgroundColor: SOURCE_COLORS[s.source] ?? '#6B7280' }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Stat Card ─────────────────────────────────────────────────────────────────
 function StatCard({ label, value, icon: Icon, color = '#D4AF37' }: { label: string; value: string; icon: LucideIcon; color?: string }) {
   return (
     <div className="bg-[#1F2937] rounded-xl border border-[#374151] p-4">
