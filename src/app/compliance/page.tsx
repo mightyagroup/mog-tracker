@@ -6,8 +6,8 @@ import { EntityType } from '@/lib/types'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Modal } from '@/components/common/Modal'
 import { EmptyState } from '@/components/common/EmptyState'
-import { CalendarCheck, Plus, X, AlertTriangle, CheckCircle, Clock, DollarSign } from 'lucide-react'
-import { format, parseISO, differenceInDays } from 'date-fns'
+import { CalendarCheck, Plus, X, AlertTriangle, CheckCircle, Clock, DollarSign, ChevronLeft, ChevronRight, LayoutList, Calendar } from 'lucide-react'
+import { format, parseISO, differenceInDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay, addMonths, subMonths } from 'date-fns'
 
 type RecordType = 'registration' | 'certification' | 'subscription'
 type RecordStatus = 'active' | 'expiring_soon' | 'expired' | 'cancelled' | 'pending'
@@ -18,6 +18,7 @@ interface ComplianceRecord {
   entity: EntityType
   name: string
   status: RecordStatus
+  start_date?: string | null
   expiration_date?: string | null
   notes?: string | null
   is_recurring?: boolean | null
@@ -79,6 +80,7 @@ export default function CompliancePage() {
   const [records, setRecords] = useState<ComplianceRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'registrations' | 'subscriptions'>('registrations')
+  const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table')
   const [entityFilter, setEntityFilter] = useState<EntityType | ''>('')
   const [showAdd, setShowAdd] = useState(false)
   const [selected, setSelected] = useState<ComplianceRecord | null>(null)
@@ -232,6 +234,26 @@ export default function CompliancePage() {
               </button>
             </div>
 
+            {/* View mode toggle */}
+            <div className="flex border border-[#374151] rounded-lg overflow-hidden">
+              <button
+                onClick={() => setViewMode('table')}
+                title="Table view"
+                className="px-3 py-2 transition"
+                style={viewMode === 'table' ? { backgroundColor: '#D4AF3722', color: '#D4AF37' } : { color: '#9CA3AF' }}
+              >
+                <LayoutList size={15} />
+              </button>
+              <button
+                onClick={() => setViewMode('calendar')}
+                title="Calendar view"
+                className="px-3 py-2 transition border-l border-[#374151]"
+                style={viewMode === 'calendar' ? { backgroundColor: '#D4AF3722', color: '#D4AF37' } : { color: '#9CA3AF' }}
+              >
+                <Calendar size={15} />
+              </button>
+            </div>
+
             <select
               value={entityFilter}
               onChange={e => setEntityFilter(e.target.value as EntityType | '')}
@@ -252,9 +274,14 @@ export default function CompliancePage() {
             </button>
           </div>
 
-          {/* Records table */}
+          {/* Records — table or calendar */}
           {loading ? (
             <div className="text-gray-500 text-sm py-12 text-center">Loading…</div>
+          ) : viewMode === 'calendar' ? (
+            <CalendarView
+              records={records.filter(r => entityFilter === '' || r.entity === entityFilter)}
+              onSelect={setSelected}
+            />
           ) : displayed.length === 0 ? (
             <EmptyState
               icon={CalendarCheck}
@@ -421,6 +448,156 @@ function SubscriptionsTable({ records, onSelect }: { records: ComplianceRecord[]
   )
 }
 
+// ── Calendar View ─────────────────────────────────────────────────────────────
+function CalendarView({
+  records,
+  onSelect,
+}: {
+  records: ComplianceRecord[]
+  onSelect: (r: ComplianceRecord) => void
+}) {
+  const [currentMonth, setCurrentMonth] = useState(new Date())
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null)
+
+  // Build date → records map (expiration_date, cancellation_deadline, start_date)
+  const dateMap = useMemo(() => {
+    const map = new Map<string, ComplianceRecord[]>()
+    records.forEach(r => {
+      const dates = [r.start_date, r.expiration_date, r.cancellation_deadline].filter(Boolean) as string[]
+      dates.forEach(d => {
+        const key = d.slice(0, 10)
+        const list = map.get(key) ?? []
+        if (!list.includes(r)) list.push(r)
+        map.set(key, list)
+      })
+    })
+    return map
+  }, [records])
+
+  const firstDay = startOfMonth(currentMonth)
+  const lastDay = endOfMonth(currentMonth)
+  const days = eachDayOfInterval({ start: firstDay, end: lastDay })
+  const startPad = getDay(firstDay) // 0 = Sunday
+
+  const selectedKey = selectedDay ? format(selectedDay, 'yyyy-MM-dd') : null
+  const selectedRecords = selectedKey ? (dateMap.get(selectedKey) ?? []) : []
+
+  const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+  return (
+    <div className="bg-[#1F2937] rounded-xl border border-[#374151] overflow-hidden">
+      {/* Month navigation */}
+      <div className="flex items-center justify-between px-5 py-4 border-b border-[#374151]">
+        <button
+          onClick={() => setCurrentMonth(m => subMonths(m, 1))}
+          className="p-1.5 rounded-lg hover:bg-[#374151] text-gray-400 hover:text-white transition"
+        >
+          <ChevronLeft size={16} />
+        </button>
+        <h3 className="text-white font-semibold">{format(currentMonth, 'MMMM yyyy')}</h3>
+        <button
+          onClick={() => setCurrentMonth(m => addMonths(m, 1))}
+          className="p-1.5 rounded-lg hover:bg-[#374151] text-gray-400 hover:text-white transition"
+        >
+          <ChevronRight size={16} />
+        </button>
+      </div>
+
+      {/* Day-of-week headers */}
+      <div className="grid grid-cols-7 border-b border-[#374151]">
+        {DOW.map(d => (
+          <div key={d} className="text-center text-xs font-medium text-gray-500 py-2">{d}</div>
+        ))}
+      </div>
+
+      {/* Calendar grid */}
+      <div className="grid grid-cols-7 gap-px bg-[#374151]">
+        {/* Leading empty cells */}
+        {Array.from({ length: startPad }).map((_, i) => (
+          <div key={`pad-${i}`} className="bg-[#161E2E] h-16" />
+        ))}
+        {/* Day cells */}
+        {days.map(day => {
+          const key = format(day, 'yyyy-MM-dd')
+          const dayRecords = dateMap.get(key) ?? []
+          const isToday = isSameDay(day, new Date())
+          const isSelected = selectedDay !== null && isSameDay(day, selectedDay)
+          const hasDates = dayRecords.length > 0
+
+          return (
+            <div
+              key={key}
+              onClick={() => hasDates && setSelectedDay(isSelected ? null : day)}
+              className={`bg-[#1F2937] h-16 p-1.5 flex flex-col ${hasDates ? 'cursor-pointer hover:bg-[#253347]' : ''} ${isSelected ? 'ring-1 ring-inset ring-[#D4AF37]' : ''} transition`}
+            >
+              <div className={`text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full mb-1 ${
+                isToday ? 'bg-[#D4AF37] text-[#111827] font-bold' : 'text-gray-300'
+              }`}>
+                {format(day, 'd')}
+              </div>
+              <div className="flex flex-wrap gap-0.5">
+                {dayRecords.slice(0, 6).map((r, i) => (
+                  <div
+                    key={i}
+                    className="w-2 h-2 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: ENTITY_COLORS[r.entity] }}
+                    title={r.name}
+                  />
+                ))}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-4 px-5 py-3 border-t border-[#374151]">
+        <span className="text-gray-500 text-xs">Entity:</span>
+        {(['exousia', 'vitalx', 'ironhouse'] as EntityType[]).map(e => (
+          <div key={e} className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: ENTITY_COLORS[e] }} />
+            <span className="text-xs text-gray-400 capitalize">{e}</span>
+          </div>
+        ))}
+        <span className="text-gray-600 text-xs ml-auto">Click a day to view records</span>
+      </div>
+
+      {/* Selected day records */}
+      {selectedDay && selectedRecords.length > 0 && (
+        <div className="border-t border-[#374151] p-4 space-y-2">
+          <div className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-3">
+            {format(selectedDay, 'MMMM d, yyyy')}
+          </div>
+          {selectedRecords.map(r => {
+            const { label, color, bg } = computeStatus(r)
+            const isExpiry = r.expiration_date?.slice(0, 10) === selectedKey
+            const isCancel = r.cancellation_deadline?.slice(0, 10) === selectedKey
+            const isStart = r.start_date?.slice(0, 10) === selectedKey
+            const dateLabel = isExpiry ? 'Expires' : isCancel ? 'Cancel By' : isStart ? 'Starts' : ''
+            return (
+              <div
+                key={r.id}
+                onClick={() => onSelect(r)}
+                className="flex items-center justify-between p-3 rounded-lg hover:bg-[#253347] cursor-pointer transition"
+              >
+                <div className="min-w-0">
+                  <div className="text-white text-sm font-medium truncate">{r.name}</div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-xs capitalize font-medium" style={{ color: ENTITY_COLORS[r.entity] }}>{r.entity}</span>
+                    <span className="text-gray-500 text-xs capitalize">{r.record_type}</span>
+                    {dateLabel && <span className="text-gray-500 text-xs">· {dateLabel}</span>}
+                  </div>
+                </div>
+                <span className="text-xs px-2 py-0.5 rounded font-medium flex-shrink-0 ml-3" style={{ color, backgroundColor: bg }}>{label}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Days Until Badge ──────────────────────────────────────────────────────────
 function DaysUntilBadge({ days, compact }: { days: number | null; compact?: boolean }) {
   if (days === null) return <span className="text-gray-600 text-xs">—</span>
@@ -458,6 +635,7 @@ function RecordDetailPanel({
         entity: form.entity,
         record_type: form.record_type,
         status: form.status,
+        start_date: form.start_date || null,
         expiration_date: form.expiration_date || null,
         notes: form.notes || null,
         is_recurring: form.is_recurring,
@@ -550,6 +728,10 @@ function RecordDetailPanel({
                   <input type="date" className={inp} value={form.expiration_date ?? ''} onChange={e => setForm(f => ({ ...f, expiration_date: e.target.value || null }))} />
                 </div>
               </div>
+              <div>
+                <label className={lbl}>Start Date</label>
+                <input type="date" className={inp} value={form.start_date ?? ''} onChange={e => setForm(f => ({ ...f, start_date: e.target.value || null }))} />
+              </div>
               {(form.record_type === 'subscription' || isSubscription) && (
                 <>
                   <div className="grid grid-cols-2 gap-3">
@@ -593,6 +775,12 @@ function RecordDetailPanel({
             </div>
           ) : (
             <div className="space-y-4">
+              {record.start_date && (
+                <div>
+                  <div className={lbl}>Start Date</div>
+                  <div className="text-gray-200 text-sm">{format(parseISO(record.start_date), 'MMMM d, yyyy')}</div>
+                </div>
+              )}
               {record.expiration_date && (
                 <div>
                   <div className={lbl}>Expiration / Renewal Date</div>
@@ -665,6 +853,7 @@ function AddRecordModal({
     entity: 'exousia' as EntityType,
     name: '',
     status: 'active' as RecordStatus,
+    start_date: '',
     expiration_date: '',
     notes: '',
     is_recurring: false,
@@ -687,6 +876,7 @@ function AddRecordModal({
         entity: form.entity,
         name: form.name.trim(),
         status: form.status,
+        start_date: form.start_date || null,
         expiration_date: form.expiration_date || null,
         notes: form.notes || null,
         is_recurring: form.record_type === 'subscription' ? form.is_recurring : false,
@@ -747,6 +937,10 @@ function AddRecordModal({
           <select className={inp} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as RecordStatus }))}>
             {Object.entries(STATUS_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
           </select>
+        </div>
+        <div>
+          <label className={lbl}>Start Date</label>
+          <input type="date" className={inp} value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} />
         </div>
         <div>
           <label className={lbl}>{isSubscription ? 'Renewal Date' : 'Expiration Date'}</label>

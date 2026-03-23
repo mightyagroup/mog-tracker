@@ -59,14 +59,44 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
       .select('*')
     if (!subs || subs.length === 0) return
 
+    // Derive relevant service tags from lead category/NAICS
+    const categoryName = (lead.service_category?.name ?? '').toLowerCase()
+    const NAICS_TO_TAGS: Record<string, string[]> = {
+      '561720': ['Janitorial', 'Window Cleaning'],
+      '561730': ['Landscaping'],
+      '561210': ['HVAC', 'Plumbing', 'Electrical', 'Fire Protection'],
+      '541614': ['Staffing'],
+      '541990': ['Staffing'],
+      '561110': ['Staffing'],
+      '237310': ['Environmental', 'Waste Removal'],
+      '492110': ['Staffing'],
+      '492210': ['Staffing'],
+      '621511': ['Staffing'],
+      '621610': ['Staffing'],
+      '485991': ['Staffing'],
+      '485999': ['Staffing'],
+      '561990': ['Staffing'],
+    }
+    const relevantTags = new Set<string>([
+      ...(lead.naics_code ? NAICS_TO_TAGS[lead.naics_code] ?? [] : []),
+      ...(categoryName.includes('janitorial') || categoryName.includes('cleaning') ? ['Janitorial'] : []),
+      ...(categoryName.includes('landscap') ? ['Landscaping'] : []),
+      ...(categoryName.includes('facilit') ? ['HVAC', 'Plumbing', 'Electrical'] : []),
+      ...(categoryName.includes('construct') ? ['Electrical', 'Plumbing', 'Roofing'] : []),
+    ])
+
     const scored = (subs as Subcontractor[]).map(sub => {
       let score = 0
       const reasons: string[] = []
       if ((sub.entities_associated ?? []).includes(entity)) { score += 20; reasons.push('associated entity') }
-      if (lead.naics_code && (sub.naics_codes ?? []).includes(lead.naics_code)) { score += 40; reasons.push(`NAICS ${lead.naics_code}`) }
-      if (lead.set_aside && lead.set_aside !== 'none' && (sub.set_asides ?? []).includes(lead.set_aside)) { score += 25; reasons.push((lead.set_aside ?? '').toUpperCase()) }
-      if (sub.teaming_agreement_status === 'executed') { score += 10; reasons.push('executed teaming agreement') }
-      return { ...sub, matchScore: score, matchReasons: reasons }
+      if (lead.naics_code && (sub.naics_codes ?? []).includes(lead.naics_code)) { score += 30; reasons.push(`NAICS ${lead.naics_code}`) }
+      // Service tag match
+      const tagMatches = (sub.service_tags ?? []).filter(t => relevantTags.has(t))
+      if (tagMatches.length > 0) { score += Math.min(tagMatches.length * 15, 30); reasons.push(...tagMatches) }
+      if (lead.set_aside && lead.set_aside !== 'none' && (sub.set_asides ?? []).includes(lead.set_aside)) { score += 20; reasons.push((lead.set_aside ?? '').toUpperCase()) }
+      if (sub.teaming_agreement_status === 'executed') { score += 10; reasons.push('executed teaming') }
+      if ((sub.reputation_rating ?? 0) >= 80) { score += 5; reasons.push('top-rated') }
+      return { ...sub, matchScore: score, matchReasons: Array.from(new Set(reasons)) }
     })
     .filter(s => s.matchScore > 0)
     .sort((a, b) => b.matchScore - a.matchScore)

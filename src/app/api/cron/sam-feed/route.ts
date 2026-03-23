@@ -307,18 +307,23 @@ export async function GET(request: Request) {
           try {
             const { data: existingContact } = await supabase
               .from('contacts')
-              .select('id, entities_associated')
+              .select('id, entities_associated, organization')
               .eq('email', pocEmail)
               .maybeSingle()
             if (existingContact) {
               const entities = Array.from(new Set([...(existingContact.entities_associated ?? []), entity]))
-              await supabase.from('contacts').update({ entities_associated: entities }).eq('id', existingContact.id)
+              const updatePayload: Record<string, unknown> = { entities_associated: entities }
+              if (!existingContact.organization && (agency ?? subAgency)) {
+                updatePayload.organization = agency ?? subAgency
+              }
+              await supabase.from('contacts').update(updatePayload).eq('id', existingContact.id)
             } else if (pocName) {
               const parts = pocName.split(' ')
               await supabase.from('contacts').insert({
                 first_name: parts[0] ?? pocName,
                 last_name: (parts.slice(1).join(' ') || parts[0]) ?? '',
                 title: pocTitle ?? 'Contracting Officer',
+                organization: agency ?? subAgency ?? null,
                 email: pocEmail,
                 phone: pocPhone ?? null,
                 contact_type: 'contracting_officer',

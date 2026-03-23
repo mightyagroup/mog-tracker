@@ -161,11 +161,14 @@ export interface Subcontractor {
   certifications: string[]
   naics_codes: string[]
   set_asides: string[]
+  service_tags: string[]
   services_offered?: string | null
   geographic_coverage?: string | null
   entities_associated: EntityType[]
   teaming_agreement_status: string
   teaming_agreement_url?: string | null
+  fit_score: number
+  reputation_rating: number
   notes?: string | null
   created_at: string
   updated_at: string
