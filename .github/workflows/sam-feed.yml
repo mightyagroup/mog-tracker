@@ -1,0 +1,104 @@
+name: SAM.gov Daily Feed
+
+# Runs daily at 11:00 UTC = 6:00 AM EST / 7:00 AM EDT
+# GitHub automatically emails the repo owner on workflow failure.
+# Manual trigger available via GitHub Actions UI or via:
+#   gh workflow run sam-feed.yml
+
+on:
+  schedule:
+    - cron: '0 11 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (fetch only, no DB writes)'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  run-feed:
+    name: Fetch SAM.gov opportunities
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Trigger SAM feed
+        id: feed
+        env:
+          VERCEL_APP_URL: ${{ secrets.VERCEL_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          DRY_RUN="${{ github.event.inputs.dry_run }}"
+          QUERY=""
+          if [ "$DRY_RUN" = "true" ]; then
+            QUERY="?dryRun=1"
+            echo "Running in DRY RUN mode — no DB writes"
+          fi
+
+          echo "Calling: ${VERCEL_APP_URL}/api/cron/sam-feed${QUERY}"
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "Content-Type: application/json" \
+            "${VERCEL_APP_URL}/api/cron/sam-feed${QUERY}")
+
+          HTTP_BODY=$(echo "$RESPONSE" | head -n -1)
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n 1)
+
+          echo "HTTP status: $HTTP_STATUS"
+          echo "Response: $HTTP_BODY"
+
+          # Save to GitHub step summary
+          echo "## SAM.gov Feed Results" >> $GITHUB_STEP_SUMMARY
+          echo "- **HTTP Status:** $HTTP_STATUS" >> $GITHUB_STEP_SUMMARY
+          echo "- **Timestamp:** $(date -u)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```json' >> $GITHUB_STEP_SUMMARY
+          echo "$HTTP_BODY" | python3 -m json.tool 2>/dev/null || echo "$HTTP_BODY"  >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+          # Fail if HTTP error
+          if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
+            echo "ERROR: HTTP $HTTP_STATUS — feed endpoint returned an error"
+            exit 1
+          fi
+
+          # Extract key fields
+          FETCHED=$(echo "$HTTP_BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('fetched',0))" 2>/dev/null || echo "0")
+          INSERTED=$(echo "$HTTP_BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('inserted',0))" 2>/dev/null || echo "0")
+          UPDATED=$(echo "$HTTP_BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('updated',0))" 2>/dev/null || echo "0")
+          ERROR_COUNT=$(echo "$HTTP_BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('errorCount',0))" 2>/dev/null || echo "0")
+          ERRORS=$(echo "$HTTP_BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print('\n'.join(d.get('errors',[])))" 2>/dev/null || echo "")
+
+          echo "Fetched: $FETCHED | Inserted: $INSERTED | Updated: $UPDATED | Errors: $ERROR_COUNT"
+
+          # Append parsed summary
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Fetched from SAM.gov | $FETCHED |" >> $GITHUB_STEP_SUMMARY
+          echo "| Inserted (new leads) | $INSERTED |" >> $GITHUB_STEP_SUMMARY
+          echo "| Updated (existing)   | $UPDATED |" >> $GITHUB_STEP_SUMMARY
+          echo "| Errors               | $ERROR_COUNT |" >> $GITHUB_STEP_SUMMARY
+
+          # Fail if SAMGOV_API_KEY missing (feed returned 0 fetched AND there are errors)
+          if [ "$FETCHED" = "0" ] && [ "$ERROR_COUNT" -gt 0 ]; then
+            echo "ERROR: Feed fetched 0 opportunities and reported $ERROR_COUNT errors."
+            echo "Errors: $ERRORS"
+            exit 1
+          fi
+
+          # Warn (but don't fail) if 0 fetched — could be a slow SAM day
+          if [ "$FETCHED" = "0" ]; then
+            echo "WARNING: Feed fetched 0 opportunities. SAM.gov may have no new postings today or the API returned empty results."
+          fi
+
+          # Fail if error rate is high (more than 10 errors suggests a systemic problem)
+          if [ "$ERROR_COUNT" -gt 10 ]; then
+            echo "ERROR: $ERROR_COUNT DB errors during feed run — possible schema or auth issue."
+            echo "Errors: $ERRORS"
+            exit 1
+          fi
+
+          echo "Feed completed successfully."
