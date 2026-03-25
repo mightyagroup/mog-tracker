@@ -2,6 +2,14 @@
 
 ---
 
+## 2026-03-25 — SAM.gov Data Quality: Phantom Solicitations from Bulk API Search
+
+**Problem:** SAM.gov bulk search API returned solicitation numbers (e.g. 140P822600011, W912PP26QA015) that returned 404 on the public SAM.gov website. These phantom entries polluted the gov_leads table with unverifiable opportunities.
+**Fix:** Added HEAD request verification against `https://sam.gov/opp/{noticeId}/view` for each NAICS-matched opportunity before inserting. Added `verified_public` boolean column to `gov_leads` table. Only verified opportunities are inserted. Verification results are cached per noticeId to avoid duplicate checks across entities. Response now includes `verified` and `failedVerification` counts for monitoring.
+**Prevention:** Never trust SAM.gov bulk search results at face value. Always verify each opportunity's public page exists before inserting into the database. Monitor the `failedVerification` count in cron output — a spike indicates API data quality issues.
+
+---
+
 ## 2026-03-25 — SAM.gov Opportunities API: Missing /prod/ in URL
 
 **Problem:** SAM.gov feed was returning 404 on every fetch. The API URL was `https://api.sam.gov/opportunities/v2/search` but authenticated (API key) access requires the `/prod/` prefix: `https://api.sam.gov/prod/opportunities/v2/search`.

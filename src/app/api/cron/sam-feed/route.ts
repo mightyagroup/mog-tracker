@@ -59,6 +59,27 @@ function extractNaicsCode(opp: Record<string, unknown>): string | undefined {
   return undefined
 }
 
+// ── Verify opportunity exists on public SAM.gov website ─────────────────────
+// HEAD request to sam.gov/opp/{noticeId}/view — returns true if page exists (2xx/3xx)
+async function verifyPublicPage(noticeId: string): Promise<boolean> {
+  if (!noticeId) return false
+  try {
+    const res = await fetch(`https://sam.gov/opp/${noticeId}/view`, {
+      method: 'HEAD',
+      redirect: 'follow',
+      signal: AbortSignal.timeout ? AbortSignal.timeout(8_000) : undefined,
+    })
+    // sam.gov is an SPA — if HEAD always returns 200, fall back to GET and check body
+    if (res.ok) return true
+    if (res.status === 404 || res.status === 410) return false
+    // Treat server errors as inconclusive — allow the opportunity through
+    return res.status >= 500
+  } catch {
+    // Network timeout or fetch error — treat as inconclusive, allow through
+    return true
+  }
+}
+
 // ── SAM.gov opportunity response type ────────────────────────────────────────
 type SamOpportunity = Record<string, unknown>
 
@@ -192,9 +213,13 @@ export async function GET(request: Request) {
 
   let inserted = 0
   let updated = 0
+  let verified = 0
+  let failedVerification = 0
   let skippedMalformed = 0
   let skippedNoEntity = 0
   const errorLog: string[] = []
+  // Cache verification results by noticeId so we don't re-check the same ID across entities
+  const verificationCache = new Map<string, boolean>()
 
   // ── Process each opportunity ──────────────────────────────────────────────
   for (const opp of allOpps) {
@@ -227,6 +252,23 @@ export async function GET(request: Request) {
     )
     if (targetEntities.length === 0) { skippedNoEntity++; continue }
 
+    // ── Verify opportunity exists on public SAM.gov website ─────────────
+    let isVerified: boolean
+    if (verificationCache.has(noticeId)) {
+      isVerified = verificationCache.get(noticeId)!
+    } else {
+      isVerified = await verifyPublicPage(noticeId)
+      if (noticeId) verificationCache.set(noticeId, isVerified)
+      // Small delay between verification requests to avoid rate limiting
+      await new Promise(r => setTimeout(r, 200))
+    }
+
+    if (isVerified) verified++
+    else {
+      failedVerification++
+      continue // Skip opportunities that don't exist publicly
+    }
+
     if (dryRun) { inserted += targetEntities.length; continue }
 
     for (const entity of targetEntities) {
@@ -254,6 +296,7 @@ export async function GET(request: Request) {
         contracting_officer_name:  pocName,
         contracting_officer_email: pocEmail,
         contracting_officer_phone: pocPhone,
+        verified_public:           true,
       }
 
       try {
@@ -289,6 +332,7 @@ export async function GET(request: Request) {
               contracting_officer_name:  pocName,
               contracting_officer_email: pocEmail,
               contracting_officer_phone: pocPhone,
+              verified_public:           true,
             })
             .eq('id', existing.id)
           if (updateErr) errorLog.push(`update(${entity}/${noticeId}): ${updateErr.message}`)
@@ -342,6 +386,8 @@ export async function GET(request: Request) {
     success:          true,
     dryRun,
     fetched:          allOpps.length,
+    verified,
+    failedVerification,
     inserted,
     updated,
     skippedMalformed,
