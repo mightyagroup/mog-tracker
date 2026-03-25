@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 
 // ── Entity NAICS config ───────────────────────────────────────────────────────
 const ENTITY_NAICS: Record<string, string[]> = {
-  exousia:   ['561720', '561730', '561210', '541614', '541990', '561110', '237310'],
+  exousia:   ['561720', '561730', '561210', '541614', '541990', '561110'],
   vitalx:    ['492110', '492210', '621511', '621610', '485991', '485999', '561990'],
   ironhouse: ['561720', '561730', '561210', '541614', '541990', '561110', '237310'],
 }
@@ -78,7 +78,7 @@ async function fetchSamPage(apiKey: string, postedFrom: string, offset: number):
     limit:      '100',
     offset:     offset.toString(),
   })
-  const url = `https://api.sam.gov/opportunities/v2/search?${params.toString()}`
+  const url = `https://api.sam.gov/prod/opportunities/v2/search?${params.toString()}`
   const res = await fetch(url, {
     headers: { Accept: 'application/json' },
     // AbortSignal.timeout may not be available on all Node versions — use manual controller

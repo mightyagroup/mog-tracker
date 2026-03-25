@@ -2,6 +2,14 @@
 
 ---
 
+## 2026-03-25 — SAM.gov Opportunities API: Missing /prod/ in URL
+
+**Problem:** SAM.gov feed was returning 404 on every fetch. The API URL was `https://api.sam.gov/opportunities/v2/search` but authenticated (API key) access requires the `/prod/` prefix: `https://api.sam.gov/prod/opportunities/v2/search`.
+**Fix:** Added `/prod/` to the URL in `src/app/api/cron/sam-feed/route.ts` line 81. Also removed `237310` from Exousia NAICS list per business decision.
+**Prevention:** SAM.gov has different base URLs for public vs authenticated access. Always use `/prod/` when passing an `api_key` parameter.
+
+---
+
 ## 2026-03-23 — Production Audit Findings
 
 **Problem:** Production audit revealed AI-generated fake data in subcontractor seeds.
