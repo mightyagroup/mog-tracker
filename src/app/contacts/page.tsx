@@ -298,42 +298,52 @@ function ContactMetricCard({ label, value, color = '#D4AF37' }: { label: string;
 
 // ── Contacts by Type Chart ──────────────────────────────────────────────────
 function ContactsByTypeChart({ data }: { data: { type: string; count: number; label: string }[] }) {
+  if (data.length === 0) return null
   return (
     <div className="bg-[#1F2937] rounded-xl border border-[#374151] p-5">
       <h2 className="text-white font-semibold text-sm mb-4">Contacts by Type</h2>
-      <ResponsiveContainer width="100%" height={150}>
-        <BarChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-          <XAxis dataKey="label" stroke="#9CA3AF" fontSize={10} angle={-45} textAnchor="end" height={60} />
-          <YAxis stroke="#9CA3AF" fontSize={12} />
-          <Tooltip
-            contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
-            labelStyle={{ color: '#FFFFFF' }}
-          />
-          <Bar dataKey="count" fill="#06A59A" />
-        </BarChart>
-      </ResponsiveContainer>
+      <div style={{ width: '100%', height: 260 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} margin={{ top: 5, right: 20, bottom: 60, left: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+            <XAxis dataKey="label" stroke="#9CA3AF" fontSize={11} angle={-35} textAnchor="end" interval={0} />
+            <YAxis stroke="#9CA3AF" fontSize={12} allowDecimals={false} />
+            <Tooltip
+              contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+              labelStyle={{ color: '#FFFFFF' }}
+              itemStyle={{ color: '#06A59A' }}
+            />
+            <Bar dataKey="count" fill="#06A59A" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   )
 }
 
 // ── Contacts by Entity Chart ────────────────────────────────────────────────
 function ContactsByEntityChart({ data }: { data: { entity: string; count: number }[] }) {
+  if (data.length === 0) return null
+  const ENTITY_LABELS: Record<string, string> = { exousia: 'Exousia', vitalx: 'VitalX', ironhouse: 'IronHouse' }
+  const labeled = data.map(d => ({ ...d, label: ENTITY_LABELS[d.entity] || d.entity }))
   return (
     <div className="bg-[#1F2937] rounded-xl border border-[#374151] p-5">
       <h2 className="text-white font-semibold text-sm mb-4">Contacts by Associated Entity</h2>
-      <ResponsiveContainer width="100%" height={150}>
-        <BarChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-          <XAxis dataKey="entity" stroke="#9CA3AF" fontSize={12} />
-          <YAxis stroke="#9CA3AF" fontSize={12} />
-          <Tooltip
-            contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
-            labelStyle={{ color: '#FFFFFF' }}
-          />
-          <Bar dataKey="count" fill="#B45309" />
-        </BarChart>
-      </ResponsiveContainer>
+      <div style={{ width: '100%', height: 260 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={labeled} margin={{ top: 5, right: 20, bottom: 20, left: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+            <XAxis dataKey="label" stroke="#9CA3AF" fontSize={12} />
+            <YAxis stroke="#9CA3AF" fontSize={12} allowDecimals={false} />
+            <Tooltip
+              contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+              labelStyle={{ color: '#FFFFFF' }}
+              itemStyle={{ color: '#B45309' }}
+            />
+            <Bar dataKey="count" fill="#B45309" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   )
 }
