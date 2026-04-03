@@ -19,7 +19,6 @@ import {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
   Header, Footer, AlignmentType, HeadingLevel, BorderStyle, WidthType,
   ShadingType, PageBreak, PageNumber, LevelFormat,
-  ExternalHyperlink,
 } from 'docx'
 import { getEntityData, type EntityProposalData } from './entity-data'
 

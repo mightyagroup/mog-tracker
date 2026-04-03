@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createWebhookSupabaseClient, validateWebhookAuth, sanitizeInput, logWebhookCall, getSourceIp } from '@/lib/webhook-utils'
 import { calculateFitScore } from '@/lib/utils'
-import { EntityType, SetAsideType, SourceType, ContractType, LeadStatus } from '@/lib/types'
+import { EntityType, SetAsideType, SourceType, ContractType, LeadStatus, type GovLead } from '@/lib/types'
 
 interface UpdateLeadRequest {
   entity: EntityType
@@ -193,7 +193,7 @@ export async function POST(request: NextRequest) {
       payload.source !== undefined
     ) {
       const fitScore = calculateFitScore(
-        { ...existingLead, ...updateData } as any,
+        { ...existingLead, ...updateData } as Partial<GovLead>,
         payload.entity
       )
       updateData.fit_score = fitScore

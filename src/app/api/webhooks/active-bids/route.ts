@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createWebhookSupabaseClient, validateWebhookAuth, logWebhookCall, getSourceIp } from '@/lib/webhook-utils'
-import { EntityType, GovLead } from '@/lib/types'
+import { EntityType, type GovLead } from '@/lib/types'
 import { addDays } from 'date-fns'
 
 export async function GET(request: NextRequest) {
@@ -82,14 +82,14 @@ export async function GET(request: NextRequest) {
     const now = new Date()
     const deadlineThreshold = addDays(now, days)
 
-    const filteredBids = (allBids || []).filter((bid: any) => {
+    const filteredBids = (allBids || []).filter((bid: Partial<GovLead>) => {
       if (!bid.response_deadline) return true // Include bids with no deadline
       const deadline = new Date(bid.response_deadline)
       return deadline <= deadlineThreshold && deadline >= now
     })
 
     // Format response
-    const responseBids = filteredBids.map((bid: any) => ({
+    const responseBids = filteredBids.map((bid: Partial<GovLead>) => ({
       id: bid.id,
       entity: bid.entity,
       title: bid.title,

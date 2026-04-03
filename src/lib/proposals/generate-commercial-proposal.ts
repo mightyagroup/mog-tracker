@@ -19,7 +19,6 @@ import {
   Header, Footer, AlignmentType, HeadingLevel, BorderStyle, WidthType,
   ShadingType, PageBreak, PageNumber, LevelFormat,
 } from 'docx'
-import { getEntityData, type EntityProposalData } from './entity-data'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -496,8 +495,6 @@ function generateServiceProposal(input: CommercialProposalInput): Document {
 }
 
 function generateCommercialSLA(input: CommercialProposalInput): Document {
-  const serviceInfo = getServiceInfo(input.serviceCategory)
-
   return new Document({
     styles: docStyles(),
     numbering: docNumbering(),
@@ -662,7 +659,7 @@ function generateCommercialPricing(input: CommercialProposalInput): Document {
           columnWidths: [4680, 4680],
           rows: [
             new TableRow({
-              children: ['Package', 'Monthly Rate'].map((text, i) =>
+              children: ['Package', 'Monthly Rate'].map((text) =>
                 new TableCell({
                   borders: allBorders('CCCCCC'),
                   width: { size: 4680, type: WidthType.DXA },
@@ -678,7 +675,7 @@ function generateCommercialPricing(input: CommercialProposalInput): Document {
               ['Premium (unlimited routine + [X] STAT)', '$[X,XXX]/month'],
             ] as [string, string][]).map(([pkg, rate]) =>
               new TableRow({
-                children: [pkg, rate].map((text, i) =>
+                children: [pkg, rate].map((text) =>
                   new TableCell({
                     borders: allBorders('DDDDDD'),
                     width: { size: 4680, type: WidthType.DXA },
