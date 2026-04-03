@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/common/EmptyState'
 import { LoadingPage } from '@/components/common/LoadingSpinner'
 import { Users, Search, Plus, X, Phone, Mail, Building2, ExternalLink } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 const CONTACT_TYPES = ['general', 'prospect', 'partner', 'contracting_officer', 'mentor', 'vendor', 'subcontractor']
 const CONTACT_TYPE_LABELS: Record<string, string> = {
@@ -29,17 +30,19 @@ export default function ContactsPage() {
   const [typeFilter, setTypeFilter] = useState('')
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null)
   const [showAdd, setShowAdd] = useState(false)
+  const [recentInteractions, setRecentInteractions] = useState<{ id: string; interaction_date: string; interaction_type?: string; subject?: string; notes?: string; entity?: string; contacts?: { first_name: string; last_name: string } }[]>([])
 
   useEffect(() => { fetchContacts() }, [])
 
   async function fetchContacts() {
     setLoading(true)
     const supabase = createClient()
-    const { data } = await supabase
-      .from('contacts')
-      .select('*')
-      .order('last_name')
-    setContacts((data ?? []) as Contact[])
+    const [contactsRes, interactionsRes] = await Promise.all([
+      supabase.from('contacts').select('*').order('last_name'),
+      supabase.from('interactions').select('*, contacts(first_name, last_name)').order('created_at', { ascending: false }).limit(10),
+    ])
+    setContacts((contactsRes.data ?? []) as Contact[])
+    setRecentInteractions(interactionsRes.data ?? [])
     setLoading(false)
   }
 
@@ -57,6 +60,61 @@ export default function ContactsPage() {
     if (typeFilter) result = result.filter(c => c.contact_type === typeFilter)
     return result
   }, [contacts, search, typeFilter])
+
+  const contactMetrics = useMemo(() => {
+    const now = new Date()
+    const parseDate = (s?: string | null) => s ? new Date(s) : null
+    const next30 = contacts.filter(c => {
+      const future = parseDate(c.next_follow_up)
+      if (!future) return false
+      const days = Math.ceil((future.getTime() - now.getTime()) / 86_400_000)
+      return days >= 0 && days <= 30
+    }).length
+
+    const overdue = contacts.filter(c => {
+      const future = parseDate(c.next_follow_up)
+      return future && future < now
+    }).length
+
+    return {
+      total: contacts.length,
+      prospects: contacts.filter(c => c.contact_type === 'prospect').length,
+      subcontractors: contacts.filter(c => c.contact_type === 'subcontractor').length,
+      nextFollowUp30: next30,
+      overdue,
+    }
+  }, [contacts])
+
+  const typeBreakdown = useMemo(() => {
+    const counts: Record<string, number> = {}
+    contacts.forEach(c => {
+      const type = c.contact_type ?? 'general'
+      counts[type] = (counts[type] ?? 0) + 1
+    })
+    return Object.entries(counts).map(([type, count]) => ({
+      type,
+      count,
+      label: CONTACT_TYPE_LABELS[type] ?? type,
+    }))
+  }, [contacts])
+
+  const entityBreakdown = useMemo(() => {
+    const counts: Record<string, number> = {}
+    contacts.forEach(c => {
+      (c.entities_associated ?? []).forEach(e => {
+        counts[e] = (counts[e] ?? 0) + 1
+      })
+    })
+    return Object.entries(counts).map(([entity, count]) => ({ entity, count }))
+  }, [contacts])
+
+  const overdueFollowUps = useMemo(() => {
+    const now = new Date()
+    return contacts
+      .filter(c => c.next_follow_up && new Date(c.next_follow_up) < now)
+      .sort((a, b) => new Date(a.next_follow_up!).getTime() - new Date(b.next_follow_up!).getTime())
+      .slice(0, 5)
+  }, [contacts])
 
   function handleSave(c: Contact) {
     setContacts(prev => {
@@ -119,6 +177,14 @@ export default function ContactsPage() {
               <Plus size={15} />
               Add Contact
             </button>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+            <ContactMetricCard label="Total Contacts" value={contactMetrics.total} />
+            <ContactMetricCard label="Prospects" value={contactMetrics.prospects} />
+            <ContactMetricCard label="Subcontractors" value={contactMetrics.subcontractors} />
+            <ContactMetricCard label="Follow-ups 30d" value={contactMetrics.nextFollowUp30} />
+            <ContactMetricCard label="Overdue Follow-ups" value={contactMetrics.overdue} color="#FCA5A5" />
           </div>
 
           <div className="mb-3">
@@ -194,6 +260,14 @@ export default function ContactsPage() {
         </main>
       </div>
 
+      {/* Additional Dashboards */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        <ContactsByTypeChart data={typeBreakdown} />
+        <ContactsByEntityChart data={entityBreakdown} />
+        <OverdueFollowUpsList data={overdueFollowUps} />
+        <RecentInteractionsFeed data={recentInteractions} />
+      </div>
+
       {selectedContact && (
         <ContactDetailPanel
           contact={selectedContact}
@@ -207,6 +281,118 @@ export default function ContactsPage() {
           onClose={() => setShowAdd(false)}
           onSave={handleSave}
         />
+      )}
+    </div>
+  )
+}
+
+// ── Contact Metrics Card ─────────────────────────────────────────────────────
+function ContactMetricCard({ label, value, color = '#D4AF37' }: { label: string; value: number; color?: string }) {
+  return (
+    <div className="bg-[#1F2937] rounded-lg border border-[#374151] p-3">
+      <div className="text-xs text-gray-400 mb-1">{label}</div>
+      <div className="text-xl font-semibold" style={{ color }}>{value}</div>
+    </div>
+  )
+}
+
+// ── Contacts by Type Chart ──────────────────────────────────────────────────
+function ContactsByTypeChart({ data }: { data: { type: string; count: number; label: string }[] }) {
+  return (
+    <div className="bg-[#1F2937] rounded-xl border border-[#374151] p-5">
+      <h2 className="text-white font-semibold text-sm mb-4">Contacts by Type</h2>
+      <ResponsiveContainer width="100%" height={150}>
+        <BarChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+          <XAxis dataKey="label" stroke="#9CA3AF" fontSize={10} angle={-45} textAnchor="end" height={60} />
+          <YAxis stroke="#9CA3AF" fontSize={12} />
+          <Tooltip
+            contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+            labelStyle={{ color: '#FFFFFF' }}
+          />
+          <Bar dataKey="count" fill="#06A59A" />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+// ── Contacts by Entity Chart ────────────────────────────────────────────────
+function ContactsByEntityChart({ data }: { data: { entity: string; count: number }[] }) {
+  return (
+    <div className="bg-[#1F2937] rounded-xl border border-[#374151] p-5">
+      <h2 className="text-white font-semibold text-sm mb-4">Contacts by Associated Entity</h2>
+      <ResponsiveContainer width="100%" height={150}>
+        <BarChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+          <XAxis dataKey="entity" stroke="#9CA3AF" fontSize={12} />
+          <YAxis stroke="#9CA3AF" fontSize={12} />
+          <Tooltip
+            contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+            labelStyle={{ color: '#FFFFFF' }}
+          />
+          <Bar dataKey="count" fill="#B45309" />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+// ── Overdue Follow-ups List ─────────────────────────────────────────────────
+function OverdueFollowUpsList({ data }: { data: Contact[] }) {
+  return (
+    <div className="bg-[#1F2937] rounded-xl border border-[#374151] p-5">
+      <h2 className="text-white font-semibold text-sm mb-4">Overdue Follow-ups</h2>
+      {data.length === 0 ? (
+        <p className="text-gray-600 text-sm">No overdue follow-ups</p>
+      ) : (
+        <div className="space-y-2">
+          {data.map(c => (
+            <div key={c.id} className="flex items-center justify-between p-2 bg-[#374151] rounded">
+              <div>
+                <div className="text-white text-sm font-medium">{c.first_name} {c.last_name}</div>
+                <div className="text-gray-400 text-xs">{c.organization ?? 'No organization'}</div>
+              </div>
+              <div className="text-red-400 text-xs">
+                {c.next_follow_up ? format(parseISO(c.next_follow_up), 'MMM d') : '—'}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Recent Interactions Feed ────────────────────────────────────────────────
+function RecentInteractionsFeed({ data }: { data: { id: string; interaction_date: string; interaction_type?: string; subject?: string; notes?: string; entity?: string; contacts?: { first_name: string; last_name: string } }[] }) {
+  return (
+    <div className="bg-[#1F2937] rounded-xl border border-[#374151] p-5">
+      <h2 className="text-white font-semibold text-sm mb-4">Recent Interactions</h2>
+      {data.length === 0 ? (
+        <p className="text-gray-600 text-sm">No recent interactions</p>
+      ) : (
+        <div className="space-y-2">
+          {data.map(i => (
+            <div key={i.id} className="flex items-start gap-3 p-2 bg-[#374151] rounded">
+              <div className="w-1.5 h-1.5 rounded-full bg-[#06A59A] flex-shrink-0 mt-1.5" />
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-gray-500 text-xs">{i.interaction_date}</span>
+                  {i.interaction_type && <span className="text-gray-600 text-xs capitalize">· {i.interaction_type}</span>}
+                  {i.entity && <span className="text-gray-600 text-xs">· {i.entity}</span>}
+                </div>
+                {i.contacts && (
+                  <div className="text-gray-300 text-xs font-medium mt-0.5">
+                    {i.contacts.first_name} {i.contacts.last_name}
+                  </div>
+                )}
+                {i.subject && i.subject !== 'Note' && <div className="text-gray-300 text-xs mt-0.5">{i.subject}</div>}
+                {i.notes && <p className="text-gray-400 text-xs mt-0.5 truncate">{i.notes}</p>}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   )

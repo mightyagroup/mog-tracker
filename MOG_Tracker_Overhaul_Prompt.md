@@ -257,6 +257,177 @@ NOTION_API_KEY=                    # For future Notion direct sync
 
 ---
 
+## PHASE 6: MOG COMMAND CENTER (FULL BUILD)
+
+The Command Center at `/` is the operational hub. It must include ALL of the following — not summary cards only.
+
+### Pipeline Summary Cards
+- Total leads, active bids, awards, pipeline value — per entity AND aggregate
+- Breakdown by entity (Exousia, VitalX, IronHouse) with entity accent colors
+
+### Pipeline Charts (install recharts — it's an approved dependency)
+- **Bar chart**: Pipeline value by entity (Exousia, VitalX, IronHouse — stacked or grouped)
+- **Pie/donut chart**: Leads by status across all entities
+- **Bar chart**: Leads by service category across entities
+- **Bar chart**: Leads by source (SAM.gov, GovWin, eVA, eMMA, Local, Manual)
+- **Bar chart**: Pipeline by Agency
+- **Bar chart**: Pipeline by Value Tier ($0-50K, $50-100K, $100-500K, $500K+)
+- **Line chart**: Monthly pipeline trend
+- All charts use MOG branding: dark background, gold (#D4AF37) / teal (#06A59A) / amber (#B45309) per entity
+
+### Win Rate Metric
+- Awards / (Awards + Lost) displayed as percentage
+- Nascence Playbook Alignment Score: % of active pipeline in the 4 Nascence NAICS codes (561720, 561730, 562111, 561210)
+
+### Deadline Calendar UI
+- Monthly calendar grid view showing which days have deadlines
+- Color-coded dots per entity on each day
+- Click a day to see the leads due that day
+- Navigation arrows for previous/next month
+- Highlight today
+- Overdue items shown prominently in red
+- Deadline summary badges: 7-day (red), 14-day (yellow), 30-day (blue) counts
+
+### Recent Activity Feed
+- Last 20 status changes, new leads added, and interactions logged across all entities
+- Pull from `interactions` table AND recently updated `gov_leads`/`commercial_leads` (order by `updated_at` DESC)
+- Show entity badge, action type, timestamp, and lead/contact name
+
+### Quick Actions Bar
+- Add Lead, Add Contact, Add Subcontractor buttons
+
+---
+
+## PHASE 7: MASTER CONTACTS DASHBOARD (FULL BUILD)
+
+### Contacts Table (`/contacts`)
+- Shared across all entities (not entity-specific)
+- Columns: Name, Organization, Type, Email, Phone, Associated Entities, Last Contact, Next Follow-Up
+- Sortable and filterable
+- Search across all fields
+
+### Contacts Detail Panel
+- Slide-over panel with full contact info
+- Interaction history for this contact (from `interactions` table)
+- Editable fields
+- Associated entities list
+
+### Contacts Dashboard Metrics
+- Total contacts count
+- Breakdown by contact type (prospect, partner, contracting_officer, mentor, vendor, subcontractor)
+- Breakdown by associated entity
+- Overdue follow-ups list (contacts where `next_follow_up` < today)
+- Follow-ups due in next 30 days
+
+### Contact Types
+prospect, partner, contracting_officer, mentor, vendor, subcontractor
+
+---
+
+## PHASE 8: PRICING CALCULATORS (FULL BUILD)
+
+### Government Pricing Calculator (all entities)
+
+**CLIN-Based Layout:**
+- Add/remove CLIN rows dynamically
+- Per CLIN fields: CLIN Number, Description, Quantity, Unit (each, hour, month, lot, sqft), Unit Cost, Extended Price
+- Sub-cost breakdown per CLIN: Labor, Materials, Equipment, Subcontractor, Overhead, Other
+- Margin input per CLIN (percentage)
+- Auto-calculate: Extended Price = Qty x Unit Cost, Total Cost, Total Price, Margin Amount, Margin %
+
+**Summary Section:**
+- Total Base Cost
+- Total Overhead (% input)
+- Total G&A (% input)
+- Total Profit/Fee (% input)
+- Grand Total Price
+- Blended margin percentage
+
+**Actions:**
+- Save pricing to database (linked to `gov_lead_id` in `pricing_records` table)
+- Export to CSV
+- Version history (each save creates new version, increment `version` column)
+- Load previous versions
+
+### Commercial Pricing Calculator (VitalX only)
+
+**Per-Line Items:**
+- Service Description
+- Frequency (per trip, daily, weekly, monthly, per specimen, per test)
+- Unit Cost
+- Number of Units
+- Extended Price
+- Driver Cost, Fuel Cost, Supply Cost, Other Cost breakdown
+
+**Summary Section:**
+- Total Revenue
+- Total Cost breakdown (driver, fuel, supply, other)
+- Gross Margin ($ and %)
+- Net Margin after overhead
+
+**Actions:**
+- Save pricing (linked to `commercial_lead_id` in `pricing_records` table)
+- Export to CSV
+
+### UI for Both Calculators
+- Live-calculating — every field updates totals instantly
+- Currency formatting ($X,XXX.XX)
+- Teal theme for VitalX commercial, navy theme for government
+- Tab within each entity tracker (Pricing tab)
+- Can also be opened from a lead's detail panel (pre-filled with lead data)
+
+---
+
+## PHASE 9: MOBILE RESPONSIVENESS
+
+All pages must be responsive. Requirements:
+- Sidebar collapses to bottom navigation bar on mobile (<768px)
+- Tables become card views on screens <768px
+- Detail panels become full-screen on mobile
+- Touch-friendly tap targets (minimum 44px)
+- Pricing calculator stacks vertically on mobile
+- Calendar grid adapts to smaller screens
+- Charts resize and remain readable on mobile
+
+---
+
+## PHASE 10: VITALX COMMERCIAL CATEGORIES
+
+VitalX has both Government AND Commercial pipelines. Commercial categories:
+- Hospital Systems
+- Reference Labs
+- Clinical Research / Biotech
+- Pharmacy / Specialty
+- Home Health
+- NEMT Brokers
+
+These are free-form text in the `service_category` column of `commercial_leads` (not linked to the `service_categories` table). The commercial tabs are: Prospects | Active Outreach | Contracts | Pricing Calculator (commercial).
+
+---
+
+## DEFAULT COMPLIANCE CHECKLIST (auto-created when lead moves to active_bid)
+
+These 16 items are inserted into the `compliance_items` table for a lead when its status changes to `active_bid`:
+
+1. Download and review full solicitation
+2. Identify all submission requirements
+3. Confirm NAICS code and size standard
+4. Verify SAM.gov registration is active
+5. Check set-aside eligibility
+6. Identify evaluation criteria and weights
+7. Review past performance requirements
+8. Draft technical approach
+9. Complete pricing worksheet
+10. Identify subcontractors needed
+11. Draft subcontractor agreements
+12. Prepare past performance references
+13. Internal review and quality check
+14. Final pricing review
+15. Submit proposal before deadline
+16. Confirm receipt of submission
+
+---
+
 ## IMPLEMENTATION ORDER
 
 1. Fix USASpending waterfall lookup (Phase 1.1) — trust issue, breaks pricing intel
@@ -269,5 +440,11 @@ NOTION_API_KEY=                    # For future Notion direct sync
 8. Security hardening pass: RLS, input sanitization, rate limiting, CSP, CORS (Security section)
 9. Make.com webhooks (Phase 4)
 10. Pipeline analytics and enhancements (Phase 5)
+11. MOG Command Center full build — charts, calendar, activity feed (Phase 6)
+12. Master Contacts dashboard full build (Phase 7)
+13. Government + Commercial pricing calculators full build (Phase 8)
+14. Mobile responsiveness pass (Phase 9)
+15. VitalX commercial categories and tabs (Phase 10)
 
 **After each phase, test thoroughly before moving to the next.** Don't stack untested changes.
+**This is an UPGRADE. Every phase must add real functionality. Do not ship placeholder cards when the spec calls for charts, calendars, and dashboards.**

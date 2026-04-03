@@ -3,10 +3,12 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { QuickActionsBar } from '@/components/dashboard/QuickActionsBar'
+import { DeadlineCalendar } from '@/components/dashboard/DeadlineCalendar'
+import { PipelineCharts } from '@/components/dashboard/PipelineCharts'
 import { SOURCE_LABELS } from '@/lib/constants'
 import { SourceType } from '@/lib/types'
 import {
-  Shield, Activity, Building2, TrendingUp, Clock, FileText,
+  Shield, Activity, Building2, TrendingUp, FileText,
   LucideIcon, Users, MessageSquare, CalendarCheck, AlertTriangle,
 } from 'lucide-react'
 
@@ -57,6 +59,44 @@ export default async function CommandCenterPage() {
   const contactCount = contactsRes.count ?? 0
   const recentActivity = interactionsRes.data ?? []
 
+  // Recent activity: combine interactions + recent lead updates
+  const recentLeads = await supabase
+    .from('gov_leads')
+    .select('id, title, status, entity, updated_at')
+    .order('updated_at', { ascending: false })
+    .limit(5)
+  const recentComm = await supabase
+    .from('commercial_leads')
+    .select('id, organization_name, status, entity, updated_at')
+    .order('updated_at', { ascending: false })
+    .limit(5)
+
+  const combinedActivity = [
+    ...recentActivity.map(i => ({ type: 'interaction', data: i } as const)),
+    ...recentLeads.data?.map(l => ({ type: 'lead_update', data: l } as const)) ?? [],
+    ...recentComm.data?.map(c => ({ type: 'commercial_update', data: c } as const)) ?? [],
+  ].sort((a, b) => {
+    const getTimestamp = (item: typeof a) => {
+      if (item.type === 'interaction') {
+        return item.data.interaction_date
+      } else if (item.type === 'lead_update') {
+        return item.data.updated_at
+      } else {
+        return item.data.updated_at
+      }
+    }
+    const aTime = getTimestamp(a)
+    const bTime = getTimestamp(b)
+    return new Date(bTime).getTime() - new Date(aTime).getTime()
+  }).slice(0, 20)
+
+  // Helper function to count deadlines within X days
+  const countByDeadline = (days: number) => {
+    const future = new Date()
+    future.setDate(future.getDate() + days)
+    return allLeads.filter(l => l.response_deadline && new Date(l.response_deadline) <= future && new Date(l.response_deadline) >= now).length
+  }
+
   // ── Compliance ────────────────────────────────────────────────────────────
   const complianceRecords = complianceRes.data ?? []
   const complianceUpcoming = complianceRecords
@@ -79,13 +119,20 @@ export default async function CommandCenterPage() {
   // ── Deadline calendar (current month) ─────────────────────────────────────
   const calMonth = now.getMonth()
   const calYear = now.getFullYear()
-  const calDeadlines = allLeads
+  const allDeadlines = allLeads
     .filter(l => l.response_deadline)
     .map(l => {
       const d = new Date(l.response_deadline!)
-      return { day: d.getDate(), month: d.getMonth(), year: d.getFullYear(), entity: l.entity as string, title: (l.title ?? 'Untitled') as string }
+      const daysOut = Math.ceil((d.getTime() - now.getTime()) / 86_400_000)
+      return {
+        day: d.getDate(),
+        month: d.getMonth(),
+        year: d.getFullYear(),
+        entity: l.entity as string,
+        title: (l.title ?? 'Untitled') as string,
+        daysOut,
+      }
     })
-    .filter(d => d.month === calMonth && d.year === calYear)
 
   // ── Category breakdown ────────────────────────────────────────────────────
   const allCategories = categoriesRes.data ?? []
@@ -110,6 +157,24 @@ export default async function CommandCenterPage() {
     .map(([source, count]) => ({ source, count, label: SOURCE_LABELS[source as SourceType] ?? source }))
     .sort((a, b) => b.count - a.count)
 
+  // ── Pipeline value by entity ──────────────────────────────────────────────
+  const pipelineByEntity = entities.map(e => ({
+    entity: e.key,
+    value: e.leads.reduce((s, l) => s + (l.estimated_value ?? 0), 0),
+    color: e.accent,
+  }))
+
+  // ── Leads by status ──────────────────────────────────────────────────────
+  const statusCounts: Record<string, number> = {}
+  for (const lead of allLeads) {
+    statusCounts[lead.status] = (statusCounts[lead.status] ?? 0) + 1
+  }
+  const statusBreakdown = Object.entries(statusCounts).map(([status, count]) => ({
+    status,
+    count,
+    label: status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+  }))
+
   return (
     <div className="flex min-h-screen bg-[#111827]">
       <Sidebar />
@@ -127,6 +192,13 @@ export default async function CommandCenterPage() {
             <StatCard label="Active Bids"    value={activeBids.toString()}      icon={TrendingUp} color="#86efac" />
             <StatCard label="Awards"         value={awarded.toString()}          icon={Shield}    color="#fcd34d" />
             <StatCard label="Pipeline Value" value={formatPipeline(totalPipeline)} icon={TrendingUp} color="#06A59A" />
+          </div>
+
+          {/* Deadline summary (7/14/30 days) */}
+          <div className="grid grid-cols-3 gap-3 mb-6">
+            <TimelineCard label="Due in 7 days" value={countByDeadline(7).toString()} color="#FCA5A5" />
+            <TimelineCard label="Due in 14 days" value={countByDeadline(14).toString()} color="#FCD34D" />
+            <TimelineCard label="Due in 30 days" value={countByDeadline(30).toString()} color="#60A5FA" />
           </div>
 
           {/* Quick actions */}
@@ -258,8 +330,8 @@ export default async function CommandCenterPage() {
             <DeadlineCalendar
               year={calYear}
               month={calMonth}
-              deadlines={calDeadlines}
               today={now.getDate()}
+              allDeadlines={allDeadlines}
             />
             <div className="space-y-4">
               <CategoryBreakdown categories={categoryBreakdown} />
@@ -267,131 +339,73 @@ export default async function CommandCenterPage() {
             </div>
           </div>
 
+          {/* Pipeline Charts */}
+          <PipelineCharts
+            pipelineData={pipelineByEntity}
+            statusData={statusBreakdown.map(s => ({ name: s.label, value: s.count }))}
+            categoryData={categoryBreakdown.map(c => ({ name: c.name, value: c.count }))}
+            sourceData={sourceBreakdown.map(s => ({ name: s.source, value: s.count }))}
+            formatPipeline={formatPipeline}
+          />
+
           {/* Recent activity */}
-          {recentActivity.length > 0 && (
+          {combinedActivity.length > 0 && (
             <div className="bg-[#1F2937] rounded-xl border border-[#374151] p-5">
               <div className="flex items-center gap-2 mb-4">
                 <MessageSquare size={16} className="text-[#06A59A]" />
                 <h2 className="text-white font-semibold">Recent Activity</h2>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
-                {recentActivity.map(i => (
-                  <div key={i.id} className="flex items-start gap-3 py-2 border-b border-[#374151] last:border-0">
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#06A59A] flex-shrink-0 mt-1.5" />
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-gray-500 text-xs">{i.interaction_date}</span>
-                        {i.interaction_type && <span className="text-gray-600 text-xs capitalize">· {i.interaction_type}</span>}
-                        {i.entity && <span className="text-gray-600 text-xs">· {i.entity}</span>}
+                {combinedActivity.map(item => {
+                  const { type, data } = item
+                  if (type === 'interaction') {
+                    return (
+                      <div key={data.id} className="flex items-start gap-3 py-2 border-b border-[#374151] last:border-0">
+                        <div className="w-1.5 h-1.5 rounded-full bg-[#06A59A] flex-shrink-0 mt-1.5" />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-gray-500 text-xs">{data.interaction_date}</span>
+                            {data.interaction_type && <span className="text-gray-600 text-xs capitalize">· {data.interaction_type}</span>}
+                            {data.entity && <span className="text-gray-600 text-xs">· {data.entity}</span>}
+                          </div>
+                          {data.subject && data.subject !== 'Note' && <div className="text-gray-300 text-xs font-medium mt-0.5">{data.subject}</div>}
+                          {data.notes && <p className="text-gray-400 text-xs mt-0.5 truncate">{data.notes}</p>}
+                        </div>
                       </div>
-                      {i.subject && i.subject !== 'Note' && <div className="text-gray-300 text-xs font-medium mt-0.5">{i.subject}</div>}
-                      {i.notes && <p className="text-gray-400 text-xs mt-0.5 truncate">{i.notes}</p>}
-                    </div>
-                  </div>
-                ))}
+                    )
+                  } else if (type === 'lead_update') {
+                    return (
+                      <div key={data.id} className="flex items-start gap-3 py-2 border-b border-[#374151] last:border-0">
+                        <div className="w-1.5 h-1.5 rounded-full bg-[#D4AF37] flex-shrink-0 mt-1.5" />
+                        <div className="min-w-0">
+                          <div className="text-gray-300 text-xs font-medium">Lead updated: {data.title}</div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-gray-500 text-xs capitalize">{data.entity}</span>
+                            <span className="text-gray-600 text-xs">· {data.status.replace('_', ' ')}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  } else if (type === 'commercial_update') {
+                    return (
+                      <div key={data.id} className="flex items-start gap-3 py-2 border-b border-[#374151] last:border-0">
+                        <div className="w-1.5 h-1.5 rounded-full bg-[#06A59A] flex-shrink-0 mt-1.5" />
+                        <div className="min-w-0">
+                          <div className="text-gray-300 text-xs font-medium">Commercial updated: {data.organization_name}</div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-gray-500 text-xs capitalize">{data.entity}</span>
+                            <span className="text-gray-600 text-xs">· {data.status.replace('_', ' ')}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  }
+                  return null
+                })}
               </div>
             </div>
           )}
         </main>
-      </div>
-    </div>
-  )
-}
-
-// ── Visual Deadline Calendar ──────────────────────────────────────────────────
-function DeadlineCalendar({
-  year, month, deadlines, today,
-}: {
-  year: number
-  month: number
-  deadlines: { day: number; entity: string; title: string }[]
-  today: number
-}) {
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const firstDayOfWeek = new Date(year, month, 1).getDay()
-  const monthName = new Date(year, month, 1).toLocaleString('en-US', { month: 'long' })
-  const DAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-
-  // Group deadlines by day
-  const byDay: Record<number, { entity: string; title: string }[]> = {}
-  for (const d of deadlines) {
-    byDay[d.day] = byDay[d.day] ?? []
-    byDay[d.day].push(d)
-  }
-
-  // Build flat array of cells: null = empty padding, number = day
-  const cells: (number | null)[] = [
-    ...Array(firstDayOfWeek).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ]
-
-  return (
-    <div className="bg-[#1F2937] rounded-xl border border-[#374151] p-5">
-      <div className="flex items-center gap-2 mb-4">
-        <Clock size={15} className="text-[#D4AF37]" />
-        <h2 className="text-white font-semibold text-sm">Deadline Calendar</h2>
-        <span className="text-gray-500 text-xs ml-auto">{monthName} {year}</span>
-      </div>
-
-      {/* Day-of-week headers */}
-      <div className="grid grid-cols-7 mb-1">
-        {DAY_HEADERS.map(d => (
-          <div key={d} className="text-center text-xs text-gray-600 py-1 font-medium">{d}</div>
-        ))}
-      </div>
-
-      {/* Day cells */}
-      <div className="grid grid-cols-7 gap-0.5">
-        {cells.map((day, i) => {
-          if (!day) return <div key={`empty-${i}`} className="h-9" />
-          const dl = byDay[day] ?? []
-          const isToday = day === today
-          return (
-            <div
-              key={day}
-              className={`h-9 rounded-lg p-1 relative ${
-                isToday
-                  ? 'ring-1 ring-[#D4AF37] bg-[#D4AF3712]'
-                  : dl.length > 0
-                  ? 'bg-[#1A2B3C]'
-                  : ''
-              }`}
-            >
-              <div className={`text-xs leading-none ${isToday ? 'text-[#D4AF37] font-bold' : 'text-gray-500'}`}>
-                {day}
-              </div>
-              {dl.length > 0 && (
-                <div className="flex flex-wrap gap-0.5 mt-0.5">
-                  {dl.slice(0, 4).map((d, j) => (
-                    <span
-                      key={j}
-                      className="w-1.5 h-1.5 rounded-full block"
-                      style={{ backgroundColor: ENTITY_COLORS[d.entity] ?? '#6B7280' }}
-                      title={`${d.entity}: ${d.title}`}
-                    />
-                  ))}
-                  {dl.length > 4 && <span className="text-gray-600 text-[9px] leading-none">+{dl.length - 4}</span>}
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Legend */}
-      <div className="flex items-center gap-4 mt-4 pt-3 border-t border-[#374151] flex-wrap">
-        {Object.entries(ENTITY_COLORS).map(([entity, color]) => (
-          <div key={entity} className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full block" style={{ backgroundColor: color }} />
-            <span className="text-xs text-gray-500 capitalize">{entity}</span>
-          </div>
-        ))}
-        {deadlines.length === 0 && (
-          <span className="text-gray-600 text-xs">No deadlines this month</span>
-        )}
-        {deadlines.length > 0 && (
-          <span className="text-gray-600 text-xs ml-auto">{deadlines.length} deadline{deadlines.length !== 1 ? 's' : ''} this month</span>
-        )}
       </div>
     </div>
   )
@@ -458,6 +472,16 @@ function SourceBreakdown({ sources }: { sources: { source: string; label: string
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Timeline Summary Card ───────────────────────────────────────────────────
+function TimelineCard({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div className="bg-[#1F2937] rounded-xl border border-[#374151] p-4">
+      <div className="text-xs text-gray-400 tracking-wide mb-1">{label}</div>
+      <div className="text-3xl font-bold" style={{ color }}>{value}</div>
     </div>
   )
 }
