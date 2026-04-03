@@ -3,6 +3,7 @@ import { createWebhookSupabaseClient, validateWebhookAuth, sanitizeInput, logWeb
 import { calculateFitScore } from '@/lib/utils'
 import { EntityType, SetAsideType, SourceType, ContractType, LeadStatus, type GovLead } from '@/lib/types'
 import { detectChanges, generateChangeNote, isLikelyAmendment, hashDescription, type LeadSnapshot } from '@/lib/lead-tracking'
+import { downloadSamDocsToFolder } from '@/lib/sam-documents'
 
 interface UpdateLeadRequest {
   entity: EntityType
@@ -244,10 +245,47 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // ── Auto-create change note ───────────────────────────────────────────
+    // ── Auto-create change note + Drive sync ─────────────────────────────
     let noteCreated = false
+    let docsUploaded = 0
     if (changes.length > 0) {
-      const changeNote = generateChangeNote(newLead, changes)
+      let changeNote = generateChangeNote(newLead, changes)
+
+      // Sync documents to Drive if amendment detected and bid folder exists
+      const driveFolderUrl = (existingLead as Record<string, unknown>).drive_folder_url as string | null
+      if (driveFolderUrl && isLikelyAmendment(changes)) {
+        const folderMatch = driveFolderUrl.match(/folders\/([a-zA-Z0-9_-]+)/)
+        if (folderMatch) {
+          try {
+            const docResult = await downloadSamDocsToFolder({
+              noticeId: (existingLead as Record<string, unknown>).notice_id as string | null,
+              solicitationNumber: payload.solicitation_number,
+              bidFolderId: folderMatch[1],
+              samGovUrl: (existingLead as Record<string, unknown>).sam_gov_url as string | null,
+            })
+            docsUploaded = docResult.totalUploaded
+
+            if (docResult.totalFound > 0) {
+              const docLines: string[] = [
+                '',
+                '---',
+                'DRIVE DOCUMENT SYNC',
+                `Found ${docResult.totalFound} document(s) on SAM.gov, uploaded ${docResult.totalUploaded} to bid folder.`,
+              ]
+              for (const doc of docResult.documents) {
+                docLines.push(`- ${doc.success ? '[synced]' : '[failed]'} ${doc.fileName}${doc.error ? ` (${doc.error})` : ''}`)
+              }
+              docLines.push(`Destination: 01_Solicitation_Docs`)
+              changeNote = (changeNote || '') + '\n' + docLines.join('\n')
+            } else {
+              changeNote = (changeNote || '') + '\n\n---\nDRIVE DOCUMENT SYNC\nNo downloadable documents found on SAM.gov. Check the solicitation page manually.'
+            }
+          } catch (driveErr) {
+            changeNote = (changeNote || '') + `\n\n---\nDRIVE SYNC ERROR: ${String(driveErr)}`
+          }
+        }
+      }
+
       if (changeNote) {
         try {
           await supabase.from('interactions').insert({
@@ -283,6 +321,7 @@ export async function POST(request: NextRequest) {
         changesDetected: changes.length,
         amendmentDetected: changes.length > 0 && isLikelyAmendment(changes),
         noteCreated,
+        docsUploaded,
         lead: updatedLead,
       },
       { status: 200 }

@@ -11,6 +11,7 @@ import {
   hashDescription,
   type LeadSnapshot,
 } from '@/lib/lead-tracking'
+import { downloadSamDocsToFolder } from '@/lib/sam-documents'
 
 const ALL_NAICS = Array.from(new Set(Object.values(ENTITY_NAICS).flat()))
 
@@ -203,6 +204,7 @@ export async function GET(request: Request) {
   let skippedNoEntity = 0
   let notesCreated = 0
   let amendmentsDetected = 0
+  let docsSynced = 0
   const errorLog: string[] = []
   // Cache verification results by noticeId so we don't re-check the same ID across entities
   const verificationCache = new Map<string, boolean>()
@@ -300,7 +302,7 @@ export async function GET(request: Request) {
         // Fetch full existing lead (not just id) so we can compare fields
         const { data: existing, error: lookupErr } = await supabase
           .from('gov_leads')
-          .select('id, title, solicitation_number, notice_id, description, agency, sub_agency, naics_code, set_aside, contract_type, place_of_performance, posted_date, response_deadline, archive_date, estimated_value, award_amount, sam_gov_url, contracting_officer_name, contracting_officer_email, contracting_officer_phone, status, entity, source, amendment_count, description_hash')
+          .select('id, title, solicitation_number, notice_id, description, agency, sub_agency, naics_code, set_aside, contract_type, place_of_performance, posted_date, response_deadline, archive_date, estimated_value, award_amount, sam_gov_url, contracting_officer_name, contracting_officer_email, contracting_officer_phone, status, entity, source, amendment_count, description_hash, drive_folder_url')
           .eq(lookupField, lookupValue)
           .eq('entity', entity)
           .maybeSingle()
@@ -379,7 +381,45 @@ export async function GET(request: Request) {
 
             // Auto-create change note if anything significant changed
             if (changes.length > 0) {
-              const changeNote = generateChangeNote(newLead, changes)
+              let changeNote = generateChangeNote(newLead, changes)
+
+              // ── Drive document sync on amendment / changes ──────────────────
+              const driveFolderUrl = (existing as Record<string, unknown>).drive_folder_url as string | null
+              if (driveFolderUrl && isLikelyAmendment(changes)) {
+                const folderMatch = driveFolderUrl.match(/folders\/([a-zA-Z0-9_-]+)/)
+                if (folderMatch) {
+                  try {
+                    const docResult = await downloadSamDocsToFolder({
+                      noticeId: noticeId || null,
+                      solicitationNumber: solNum,
+                      bidFolderId: folderMatch[1],
+                      samGovUrl: samUrl,
+                    })
+                    docsSynced += docResult.totalUploaded
+
+                    // Append document sync details to the change note
+                    if (docResult.totalFound > 0) {
+                      const docLines: string[] = [
+                        '',
+                        '---',
+                        'DRIVE DOCUMENT SYNC',
+                        `Found ${docResult.totalFound} document(s) on SAM.gov, uploaded ${docResult.totalUploaded} to bid folder.`,
+                      ]
+                      for (const doc of docResult.documents) {
+                        docLines.push(`- ${doc.success ? '[synced]' : '[failed]'} ${doc.fileName}${doc.error ? ` (${doc.error})` : ''}`)
+                      }
+                      docLines.push(`Destination: 01_Solicitation_Docs`)
+                      changeNote = (changeNote || '') + '\n' + docLines.join('\n')
+                    } else {
+                      changeNote = (changeNote || '') + '\n\n---\nDRIVE DOCUMENT SYNC\nNo downloadable documents found on SAM.gov. Check the solicitation page manually.'
+                    }
+                  } catch (driveErr) {
+                    changeNote = (changeNote || '') + `\n\n---\nDRIVE SYNC ERROR: ${String(driveErr)}`
+                    errorLog.push(`drive-sync(${entity}/${noticeId}): ${String(driveErr)}`)
+                  }
+                }
+              }
+
               if (changeNote) {
                 try {
                   await supabase.from('interactions').insert({
@@ -488,6 +528,7 @@ export async function GET(request: Request) {
     updated,
     notesCreated,
     amendmentsDetected,
+    docsSynced,
     skippedMalformed,
     skippedNoEntity,
     errorCount:       errorLog.length,
