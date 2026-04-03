@@ -265,13 +265,40 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
 
     if (data) {
       const updatedLead = data as GovLead
-      if (newStatus === 'active_bid' && complianceItems.length === 0) {
-        await createDefaultComplianceItems(lead.id)
-        await loadCompliance()
+      if (newStatus === 'active_bid') {
+        // Auto-create compliance items
+        if (complianceItems.length === 0) {
+          await createDefaultComplianceItems(lead.id)
+          await loadCompliance()
+        }
+        // Auto-create Google Drive bid folder
+        if (!updatedLead.drive_folder_url) {
+          createDriveBidFolder(lead.id).then(folderUrl => {
+            if (folderUrl) {
+              setForm(f => ({ ...f, drive_folder_url: folderUrl }))
+            }
+          })
+        }
         setActiveSection('compliance')
       }
       setForm(f => ({ ...f, status: newStatus }))
       onUpdate(updatedLead)
+    }
+  }
+
+  async function createDriveBidFolder(leadId: string): Promise<string | null> {
+    try {
+      const resp = await fetch('/api/drive/create-bid-folder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadId }),
+      })
+      if (!resp.ok) return null
+      const result = await resp.json()
+      return result.folderUrl || null
+    } catch {
+      console.error('Failed to create Drive folder')
+      return null
     }
   }
 
@@ -617,7 +644,23 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                   <div className="flex flex-wrap gap-3">
                     <LinkButton href={lead.sam_gov_url} label="SAM.gov" />
                     <LinkButton href={lead.solicitation_url} label="Solicitation" />
-                    <LinkButton href={lead.drive_folder_url} label="Drive Folder" icon={<Folder size={13} />} />
+                    {(lead.drive_folder_url || form.drive_folder_url) ? (
+                      <LinkButton href={form.drive_folder_url || lead.drive_folder_url} label="Drive Folder" icon={<Folder size={13} />} />
+                    ) : (
+                      <button
+                        onClick={async () => {
+                          const url = await createDriveBidFolder(lead.id)
+                          if (url) {
+                            setForm(f => ({ ...f, drive_folder_url: url }))
+                            onUpdate({ ...lead, drive_folder_url: url })
+                          }
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-colors"
+                      >
+                        <Folder size={13} />
+                        Create Drive Folder
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
