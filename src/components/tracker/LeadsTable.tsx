@@ -20,8 +20,29 @@ import { EmptyState } from '@/components/common/EmptyState'
 import { LoadingPage } from '@/components/common/LoadingSpinner'
 import {
   Download, Search, SlidersHorizontal, X, ArrowUpDown, ArrowUp, ArrowDown,
-  ChevronDown, FileSearch, Upload,
+  ChevronDown, FileSearch, Upload, AlertTriangle, Bell,
 } from 'lucide-react'
+
+/** Amendment indicator badge */
+function AmendmentBadge({ count, lastDate }: { count: number; lastDate?: string | null }) {
+  if (!count || count === 0) return null
+  const isRecent = lastDate
+    ? (Date.now() - new Date(lastDate).getTime()) < 7 * 24 * 60 * 60 * 1000
+    : false
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+        isRecent
+          ? 'bg-red-500/20 text-red-400 animate-pulse'
+          : 'bg-amber-500/15 text-amber-400'
+      }`}
+      title={`${count} amendment(s) detected${lastDate ? ` — last: ${new Date(lastDate).toLocaleDateString()}` : ''}`}
+    >
+      <AlertTriangle size={10} />
+      {count > 1 ? `${count} amendments` : 'Amended'}
+    </span>
+  )
+}
 
 /** Renders relative "First Seen" badge with color coding */
 function FirstSeenBadge({ createdAt }: { createdAt: string }) {
@@ -457,6 +478,44 @@ export function LeadsTable({
         </div>
       )}
 
+      {/* Amendment notification banner */}
+      {(() => {
+        const recentAmendments = leads.filter(l =>
+          (l.amendment_count ?? 0) > 0 &&
+          l.last_amendment_date &&
+          (Date.now() - new Date(l.last_amendment_date).getTime()) < 7 * 24 * 60 * 60 * 1000
+        )
+        if (recentAmendments.length === 0) return null
+        return (
+          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl flex items-start gap-3">
+            <Bell size={16} className="text-red-400 mt-0.5 flex-shrink-0 animate-pulse" />
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-red-400 mb-1">
+                {recentAmendments.length} Amendment{recentAmendments.length > 1 ? 's' : ''} Detected This Week
+              </div>
+              <div className="space-y-1">
+                {recentAmendments.slice(0, 5).map(l => (
+                  <button
+                    key={l.id}
+                    onClick={() => setSelectedLead(l)}
+                    className="block text-xs text-gray-300 hover:text-white transition truncate max-w-full text-left"
+                  >
+                    <span className="text-red-400 font-mono mr-1">{l.solicitation_number || '—'}</span>
+                    {l.title}
+                    <span className="text-gray-500 ml-2">
+                      ({l.amendment_count} amendment{(l.amendment_count ?? 0) > 1 ? 's' : ''})
+                    </span>
+                  </button>
+                ))}
+                {recentAmendments.length > 5 && (
+                  <span className="text-xs text-gray-500">+ {recentAmendments.length - 5} more</span>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Stats row */}
       <div className="flex items-center gap-3 mb-3 flex-wrap">
         <span className="text-gray-500 text-xs">
@@ -540,9 +599,14 @@ export function LeadsTable({
                       </td>
                       <td className="px-4 py-3 max-w-xs">
                         <div className="text-white font-medium truncate leading-snug">{lead.title}</div>
-                        {lead.solicitation_number && (
-                          <div className="text-gray-500 text-xs mt-0.5 font-mono truncate">{lead.solicitation_number}</div>
-                        )}
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {lead.solicitation_number && (
+                            <span className="text-gray-500 text-xs font-mono truncate">{lead.solicitation_number}</span>
+                          )}
+                          {(lead.amendment_count ?? 0) > 0 && (
+                            <AmendmentBadge count={lead.amendment_count!} lastDate={lead.last_amendment_date} />
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-gray-300 max-w-[160px]">
                         <div className="truncate">{lead.agency ?? '—'}</div>

@@ -103,6 +103,10 @@ export interface GovLead {
   usaspending_confidence?: string | null
   manual_pricing_override?: boolean | null
   solicitation_verified?: boolean | null
+  amendment_count?: number | null
+  last_amendment_date?: string | null
+  last_checked_at?: string | null
+  description_hash?: string | null
   created_at: string
   updated_at: string
 }

@@ -9,7 +9,7 @@ import { SOURCE_LABELS } from '@/lib/constants'
 import { SourceType } from '@/lib/types'
 import {
   Shield, Activity, Building2, TrendingUp, FileText,
-  LucideIcon, Users, MessageSquare, CalendarCheck, AlertTriangle,
+  LucideIcon, Users, MessageSquare, CalendarCheck, AlertTriangle, Bell,
 } from 'lucide-react'
 
 const ENTITY_COLORS: Record<string, string> = {
@@ -37,9 +37,9 @@ export default async function CommandCenterPage() {
   const now = new Date()
 
   const [exousiaRes, vitalxRes, ironhouseRes, interactionsRes, contactsRes, complianceRes, categoriesRes] = await Promise.all([
-    supabase.from('gov_leads').select('id, status, estimated_value, response_deadline, title, entity, source, service_category_id').eq('entity', 'exousia'),
-    supabase.from('gov_leads').select('id, status, estimated_value, response_deadline, title, entity, source, service_category_id').eq('entity', 'vitalx'),
-    supabase.from('gov_leads').select('id, status, estimated_value, response_deadline, title, entity, source, service_category_id').eq('entity', 'ironhouse'),
+    supabase.from('gov_leads').select('id, status, estimated_value, response_deadline, title, entity, source, service_category_id, solicitation_number, amendment_count, last_amendment_date').eq('entity', 'exousia'),
+    supabase.from('gov_leads').select('id, status, estimated_value, response_deadline, title, entity, source, service_category_id, solicitation_number, amendment_count, last_amendment_date').eq('entity', 'vitalx'),
+    supabase.from('gov_leads').select('id, status, estimated_value, response_deadline, title, entity, source, service_category_id, solicitation_number, amendment_count, last_amendment_date').eq('entity', 'ironhouse'),
     supabase.from('interactions').select('id, interaction_date, interaction_type, subject, notes, entity').order('created_at', { ascending: false }).limit(10),
     supabase.from('contacts').select('id', { count: 'exact', head: true }),
     supabase.from('compliance_records').select('id, name, entity, record_type, expiration_date, cancellation_deadline, monthly_cost'),
@@ -324,6 +324,53 @@ export default async function CommandCenterPage() {
               </div>
             </div>
           )}
+
+          {/* Amendment alerts */}
+          {(() => {
+            const amended = allLeads.filter((l: Record<string, unknown>) =>
+              ((l.amendment_count as number) ?? 0) > 0 &&
+              l.last_amendment_date &&
+              (Date.now() - new Date(l.last_amendment_date as string).getTime()) < 14 * 24 * 60 * 60 * 1000
+            )
+            if (amended.length === 0) return null
+            const ENTITY_HREF: Record<string, string> = { exousia: '/exousia', vitalx: '/vitalx', ironhouse: '/ironhouse' }
+            return (
+              <div className="mb-6 bg-[#1F2937] rounded-xl border border-red-900/50 overflow-hidden">
+                <div className="flex items-center gap-2 px-5 py-3 border-b border-[#374151]">
+                  <Bell size={14} className="text-red-400 animate-pulse" />
+                  <h3 className="text-white font-medium text-sm">Recent Amendments ({amended.length})</h3>
+                  <span className="text-gray-500 text-xs ml-2">Last 14 days</span>
+                </div>
+                <div className="divide-y divide-[#374151]">
+                  {amended.slice(0, 8).map((l: Record<string, unknown>) => {
+                    const days = Math.floor((Date.now() - new Date(l.last_amendment_date as string).getTime()) / 86_400_000)
+                    return (
+                      <Link key={l.id as string} href={ENTITY_HREF[(l.entity as string)] || '/exousia'}>
+                        <div className="flex items-center justify-between px-5 py-3 hover:bg-[#253347] transition cursor-pointer">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: ENTITY_COLORS[(l.entity as string)] ?? '#6B7280' }} />
+                            <div className="min-w-0">
+                              <div className="text-gray-200 text-sm truncate">{l.title as string}</div>
+                              <div className="text-gray-500 text-xs">
+                                <span className="font-mono">{(l.solicitation_number as string) || '—'}</span>
+                                <span className="mx-1.5 text-gray-600">·</span>
+                                <span className="capitalize">{l.entity as string}</span>
+                                <span className="mx-1.5 text-gray-600">·</span>
+                                {(l.amendment_count as number)} amendment{(l.amendment_count as number) > 1 ? 's' : ''}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right flex-shrink-0 ml-3">
+                            <div className="font-semibold text-sm text-red-400">{days === 0 ? 'Today' : `${days}d ago`}</div>
+                          </div>
+                        </div>
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
 
           {/* Calendar + breakdowns */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
