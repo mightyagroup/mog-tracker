@@ -3,6 +3,14 @@ import { createClient } from '@supabase/supabase-js'
 import { ENTITY_NAICS } from '@/lib/constants'
 import { calculateFitScore } from '@/lib/utils'
 import { EntityType, SetAsideType } from '@/lib/types'
+import {
+  generateInitialSummary,
+  detectChanges,
+  generateChangeNote,
+  isLikelyAmendment,
+  hashDescription,
+  type LeadSnapshot,
+} from '@/lib/lead-tracking'
 
 const ALL_NAICS = Array.from(new Set(Object.values(ENTITY_NAICS).flat()))
 
@@ -193,6 +201,8 @@ export async function GET(request: Request) {
   let failedVerification = 0
   let skippedMalformed = 0
   let skippedNoEntity = 0
+  let notesCreated = 0
+  let amendmentsDetected = 0
   const errorLog: string[] = []
   // Cache verification results by noticeId so we don't re-check the same ID across entities
   const verificationCache = new Map<string, boolean>()
@@ -287,9 +297,10 @@ export async function GET(request: Request) {
         const lookupValue = noticeId || solNum
         if (!lookupValue) continue
 
+        // Fetch full existing lead (not just id) so we can compare fields
         const { data: existing, error: lookupErr } = await supabase
           .from('gov_leads')
-          .select('id')
+          .select('id, title, solicitation_number, notice_id, description, agency, sub_agency, naics_code, set_aside, contract_type, place_of_performance, posted_date, response_deadline, archive_date, estimated_value, award_amount, sam_gov_url, contracting_officer_name, contracting_officer_email, contracting_officer_phone, status, entity, source, amendment_count, description_hash')
           .eq(lookupField, lookupValue)
           .eq('entity', entity)
           .maybeSingle()
@@ -300,32 +311,134 @@ export async function GET(request: Request) {
         }
 
         if (existing) {
+          // ── Change detection ──────────────────────────────────────────────
+          const oldLead: LeadSnapshot = existing as LeadSnapshot
+          const newLead: LeadSnapshot = {
+            title,
+            solicitation_number: solNum,
+            notice_id: noticeId || null,
+            description: typeof opp.description === 'string' ? opp.description : null,
+            agency,
+            sub_agency: subAgency,
+            naics_code: naicsCode ?? null,
+            set_aside: setAside,
+            place_of_performance: placeOfPerf || null,
+            posted_date: postedDate,
+            response_deadline: deadline ?? null,
+            archive_date: archiveDate,
+            sam_gov_url: samUrl,
+            contracting_officer_name: pocName,
+            contracting_officer_email: pocEmail,
+            contracting_officer_phone: pocPhone,
+            entity,
+            source: 'sam_gov',
+          }
+
+          const changes = detectChanges(oldLead, newLead)
+
+          // Build update payload
+          const updatePayload: Record<string, unknown> = {
+            title,
+            agency,
+            sub_agency:                subAgency,
+            place_of_performance:      placeOfPerf || null,
+            response_deadline:         deadline ?? null,
+            archive_date:              archiveDate,
+            fit_score:                 fitScore,
+            service_category_id:       categoryId,
+            sam_gov_url:               samUrl,
+            contracting_officer_name:  pocName,
+            contracting_officer_email: pocEmail,
+            contracting_officer_phone: pocPhone,
+            verified_public:           true,
+            last_checked_at:           new Date().toISOString(),
+          }
+
+          // Track amendment if significant changes detected
+          if (changes.length > 0 && isLikelyAmendment(changes)) {
+            updatePayload.amendment_count = (existing.amendment_count ?? 0) + 1
+            updatePayload.last_amendment_date = new Date().toISOString()
+            amendmentsDetected++
+          }
+
+          // Update description hash if description changed
+          const newDesc = typeof opp.description === 'string' ? opp.description : null
+          if (newDesc) {
+            updatePayload.description_hash = hashDescription(newDesc)
+          }
+
           const { error: updateErr } = await supabase
             .from('gov_leads')
-            .update({
-              title,
-              agency,
-              sub_agency:                subAgency,
-              place_of_performance:      placeOfPerf || null,
-              response_deadline:         deadline ?? null,
-              archive_date:              archiveDate,
-              fit_score:                 fitScore,
-              service_category_id:       categoryId,
-              sam_gov_url:               samUrl,
-              contracting_officer_name:  pocName,
-              contracting_officer_email: pocEmail,
-              contracting_officer_phone: pocPhone,
-              verified_public:           true,
-            })
+            .update(updatePayload)
             .eq('id', existing.id)
-          if (updateErr) errorLog.push(`update(${entity}/${noticeId}): ${updateErr.message}`)
-          else updated++
+
+          if (updateErr) {
+            errorLog.push(`update(${entity}/${noticeId}): ${updateErr.message}`)
+          } else {
+            updated++
+
+            // Auto-create change note if anything significant changed
+            if (changes.length > 0) {
+              const changeNote = generateChangeNote(newLead, changes)
+              if (changeNote) {
+                try {
+                  await supabase.from('interactions').insert({
+                    entity,
+                    gov_lead_id: existing.id,
+                    interaction_date: new Date().toISOString().slice(0, 10),
+                    interaction_type: 'system_update',
+                    subject: isLikelyAmendment(changes)
+                      ? `Amendment Detected -- ${changes.filter(c => c.significance === 'high').map(c => c.label).join(', ')}`
+                      : `Lead Updated -- ${changes.map(c => c.label).join(', ')}`,
+                    notes: changeNote,
+                  })
+                  notesCreated++
+                } catch { /* non-fatal */ }
+              }
+            }
+          }
         } else {
-          const { error: insertErr } = await supabase.from('gov_leads').insert(leadData)
+          // ── New lead: insert + create initial summary note ────────────────
+          const descText = typeof opp.description === 'string' ? opp.description : null
+          const insertData = {
+            ...leadData,
+            description_hash: hashDescription(descText),
+            last_checked_at: new Date().toISOString(),
+          }
+
+          const { data: insertedLead, error: insertErr } = await supabase
+            .from('gov_leads')
+            .insert(insertData)
+            .select('id')
+            .single()
+
           if (insertErr) {
             errorLog.push(`insert(${entity}/${noticeId || solNum}): ${insertErr.message}`)
           } else {
             inserted++
+
+            // Create initial summary note
+            if (insertedLead?.id) {
+              const summaryLead: LeadSnapshot = {
+                ...leadData,
+                description: descText,
+                contracting_officer_name: pocName,
+                contracting_officer_email: pocEmail,
+                contracting_officer_phone: pocPhone,
+              }
+              const summaryNote = generateInitialSummary(summaryLead)
+              try {
+                await supabase.from('interactions').insert({
+                  entity,
+                  gov_lead_id: insertedLead.id,
+                  interaction_date: new Date().toISOString().slice(0, 10),
+                  interaction_type: 'system_update',
+                  subject: 'New Opportunity -- Initial Summary',
+                  notes: summaryNote,
+                })
+                notesCreated++
+              } catch { /* non-fatal */ }
+            }
           }
         }
 
@@ -373,6 +486,8 @@ export async function GET(request: Request) {
     failedVerification,
     inserted,
     updated,
+    notesCreated,
+    amendmentsDetected,
     skippedMalformed,
     skippedNoEntity,
     errorCount:       errorLog.length,

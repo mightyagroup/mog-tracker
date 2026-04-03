@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createWebhookSupabaseClient, validateWebhookAuth, sanitizeInput, logWebhookCall, getSourceIp } from '@/lib/webhook-utils'
 import { calculateFitScore } from '@/lib/utils'
 import { EntityType, SetAsideType, SourceType, ContractType, LeadStatus, type GovLead } from '@/lib/types'
+import { detectChanges, generateChangeNote, isLikelyAmendment, hashDescription, type LeadSnapshot } from '@/lib/lead-tracking'
 
 interface UpdateLeadRequest {
   entity: EntityType
@@ -199,6 +200,26 @@ export async function POST(request: NextRequest) {
       updateData.fit_score = fitScore
     }
 
+    // ── Change detection before update ─────────────────────────────────────
+    const oldLead: LeadSnapshot = existingLead as LeadSnapshot
+    const newLead: LeadSnapshot = { ...oldLead }
+    for (const [key, val] of Object.entries(updateData)) {
+      (newLead as Record<string, unknown>)[key] = val
+    }
+    const changes = detectChanges(oldLead, newLead)
+
+    // Track amendment if significant changes
+    if (changes.length > 0 && isLikelyAmendment(changes)) {
+      updateData.amendment_count = ((existingLead as Record<string, unknown>).amendment_count as number ?? 0) + 1
+      updateData.last_amendment_date = new Date().toISOString()
+    }
+    updateData.last_checked_at = new Date().toISOString()
+
+    // Update description hash if description changed
+    if (payload.description !== undefined) {
+      updateData.description_hash = hashDescription(payload.description ?? null)
+    }
+
     // Perform update
     const { data: updatedLead, error: updateError } = await supabase
       .from('gov_leads')
@@ -223,6 +244,27 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // ── Auto-create change note ───────────────────────────────────────────
+    let noteCreated = false
+    if (changes.length > 0) {
+      const changeNote = generateChangeNote(newLead, changes)
+      if (changeNote) {
+        try {
+          await supabase.from('interactions').insert({
+            entity: payload.entity,
+            gov_lead_id: existingLead.id,
+            interaction_date: new Date().toISOString().slice(0, 10),
+            interaction_type: 'system_update',
+            subject: isLikelyAmendment(changes)
+              ? `Amendment Detected -- ${changes.filter(c => c.significance === 'high').map(c => c.label).join(', ')}`
+              : `Lead Updated -- ${changes.map(c => c.label).join(', ')}`,
+            notes: changeNote,
+          })
+          noteCreated = true
+        } catch { /* non-fatal */ }
+      }
+    }
+
     // Log successful webhook call
     await logWebhookCall({
       endpoint,
@@ -238,6 +280,9 @@ export async function POST(request: NextRequest) {
         success: true,
         message: 'Lead updated successfully',
         leadId: updatedLead.id,
+        changesDetected: changes.length,
+        amendmentDetected: changes.length > 0 && isLikelyAmendment(changes),
+        noteCreated,
         lead: updatedLead,
       },
       { status: 200 }
