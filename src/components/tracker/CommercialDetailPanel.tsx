@@ -60,7 +60,15 @@ export function CommercialDetailPanel({
         contact_title: form.contact_title,
         contact_email: form.contact_email,
         contact_phone: form.contact_phone,
+        contact_department: form.contact_department,
+        contact_direct_phone: form.contact_direct_phone,
+        contact_linkedin: form.contact_linkedin,
         website: form.website,
+        office_name: form.office_name,
+        office_address: form.office_address,
+        office_city: form.office_city,
+        office_state: form.office_state,
+        office_zip: form.office_zip,
         status: form.status,
         service_category: form.service_category,
         estimated_annual_value: form.estimated_annual_value,
@@ -74,6 +82,7 @@ export function CommercialDetailPanel({
         proposal_url: form.proposal_url,
         drive_folder_url: form.drive_folder_url,
         notes: form.notes,
+        service_summary: form.service_summary,
       })
       .eq('id', lead.id)
       .select()
@@ -202,10 +211,39 @@ export function CommercialDetailPanel({
               <div className="grid grid-cols-2 gap-4">
                 <EField label="Contact Name" value={form.contact_name} editMode={editMode} onChange={v => setForm(f => ({ ...f, contact_name: v }))} />
                 <EField label="Title" value={form.contact_title} editMode={editMode} onChange={v => setForm(f => ({ ...f, contact_title: v }))} />
+                <EField label="Department" value={form.contact_department} editMode={editMode} onChange={v => setForm(f => ({ ...f, contact_department: v }))} />
                 <EField label="Email" value={form.contact_email} editMode={editMode} type="email" onChange={v => setForm(f => ({ ...f, contact_email: v }))} />
-                <EField label="Phone" value={form.contact_phone} editMode={editMode} onChange={v => setForm(f => ({ ...f, contact_phone: v }))} />
+                <EField label="Main Phone" value={form.contact_phone} editMode={editMode} onChange={v => setForm(f => ({ ...f, contact_phone: v }))} />
+                <EField label="Direct Line" value={form.contact_direct_phone} editMode={editMode} onChange={v => setForm(f => ({ ...f, contact_direct_phone: v }))} />
+                <EField label="LinkedIn" value={form.contact_linkedin} editMode={editMode} type="url" onChange={v => setForm(f => ({ ...f, contact_linkedin: v }))} />
                 <EField label="Website" value={form.website} editMode={editMode} type="url" onChange={v => setForm(f => ({ ...f, website: v }))} />
               </div>
+
+              <Divider label="Office / Facility" />
+              <div className="grid grid-cols-2 gap-4">
+                <EField label="Office Name" value={form.office_name} editMode={editMode} onChange={v => setForm(f => ({ ...f, office_name: v }))} />
+                <EField label="Address" value={form.office_address} editMode={editMode} onChange={v => setForm(f => ({ ...f, office_address: v }))} />
+                <EField label="City" value={form.office_city} editMode={editMode} onChange={v => setForm(f => ({ ...f, office_city: v }))} />
+                <EField label="State" value={form.office_state} editMode={editMode} onChange={v => setForm(f => ({ ...f, office_state: v }))} />
+                <EField label="ZIP" value={form.office_zip} editMode={editMode} onChange={v => setForm(f => ({ ...f, office_zip: v }))} />
+              </div>
+
+              <Divider label="Service Summary" />
+              {editMode ? (
+                <div>
+                  <textarea
+                    className={`${inp} resize-none`}
+                    rows={4}
+                    placeholder="What services does this organization need? Key context, decision-maker notes, facility details..."
+                    value={form.service_summary ?? ''}
+                    onChange={e => setForm(f => ({ ...f, service_summary: e.target.value }))}
+                  />
+                </div>
+              ) : (
+                <div className="text-gray-300 text-sm whitespace-pre-wrap">
+                  {lead.service_summary || <span className="text-gray-600">No service summary added yet.</span>}
+                </div>
+              )}
 
               {editMode && (
                 <div className="grid grid-cols-2 gap-4">

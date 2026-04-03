@@ -8,6 +8,7 @@ import {
   SOURCE_REGION, REGION_LABELS,
 } from '@/lib/constants'
 import { formatCurrency, exportLeadsToCSV, isLowFit } from '@/lib/utils'
+import { formatDistanceToNowStrict, parseISO, format } from 'date-fns'
 import { StatusBadge } from './StatusBadge'
 import { CategoryBadge } from './CategoryBadge'
 import { DeadlineCountdown } from './DeadlineCountdown'
@@ -21,6 +22,41 @@ import {
   Download, Search, SlidersHorizontal, X, ArrowUpDown, ArrowUp, ArrowDown,
   ChevronDown, FileSearch, Upload,
 } from 'lucide-react'
+
+/** Renders relative "First Seen" badge with color coding */
+function FirstSeenBadge({ createdAt }: { createdAt: string }) {
+  const date = parseISO(createdAt)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+  let badgeColor = 'text-gray-500'
+  let bgColor = ''
+  if (diffDays === 0) {
+    badgeColor = 'text-emerald-400'
+    bgColor = 'bg-emerald-400/10'
+  } else if (diffDays <= 2) {
+    badgeColor = 'text-blue-400'
+    bgColor = 'bg-blue-400/10'
+  } else if (diffDays <= 7) {
+    badgeColor = 'text-gray-300'
+  }
+
+  const relative = diffDays === 0
+    ? 'Today'
+    : formatDistanceToNowStrict(date, { addSuffix: true })
+
+  const fullDate = format(date, 'MMM d, yyyy')
+
+  return (
+    <div className="flex flex-col">
+      <span className={`text-xs font-medium ${badgeColor} ${bgColor} ${bgColor ? 'px-1.5 py-0.5 rounded' : ''}`}>
+        {relative}
+      </span>
+      <span className="text-[10px] text-gray-600 mt-0.5">{fullDate}</span>
+    </div>
+  )
+}
 
 interface LeadsTableProps {
   entity: EntityType
@@ -481,6 +517,7 @@ export function LeadsTable({
                   <th className="px-4 py-3 text-left font-medium text-gray-400">Docs</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-400">Category</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-400">Source</th>
+                  <SortHeader field="created_at" current={sortField} dir={sortDir} onClick={handleSort}>First Seen</SortHeader>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#374151]">
@@ -552,6 +589,9 @@ export function LeadsTable({
                       </td>
                       <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
                         {SOURCE_LABELS[lead.source]}
+                      </td>
+                      <td className="px-4 py-3">
+                        {lead.created_at ? <FirstSeenBadge createdAt={lead.created_at} /> : <span className="text-gray-600 text-xs">—</span>}
                       </td>
                     </tr>
                   )

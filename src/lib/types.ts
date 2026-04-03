@@ -115,7 +115,15 @@ export interface CommercialLead {
   contact_title?: string | null
   contact_email?: string | null
   contact_phone?: string | null
+  contact_department?: string | null
+  contact_direct_phone?: string | null
+  contact_linkedin?: string | null
   website?: string | null
+  office_name?: string | null
+  office_address?: string | null
+  office_city?: string | null
+  office_state?: string | null
+  office_zip?: string | null
   status: CommercialStatus
   service_category?: string | null
   estimated_annual_value?: number | null
@@ -129,6 +137,7 @@ export interface CommercialLead {
   proposal_url?: string | null
   drive_folder_url?: string | null
   notes?: string | null
+  service_summary?: string | null
   fit_score: number
   volume_tier?: string | null
   created_at: string
