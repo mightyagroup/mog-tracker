@@ -8,9 +8,9 @@ export const ENTITY_BRANDING: Record<string, { primary: string; accent: string; 
 }
 
 export const ENTITY_NAICS: Record<EntityType, string[]> = {
-  exousia:   ['561720', '561730', '561210', '541614', '541990', '561110', '237310'],
+  exousia:   ['561720', '561730', '561210', '541614', '541611'],
   vitalx:    ['492110', '492210', '621511', '621610', '485991', '485999', '561990'],
-  ironhouse: ['561720', '561730', '561210', '541614', '541990', '561110', '237310'],
+  ironhouse: ['561720', '561730', '561210', '562111'],
 }
 
 export const LEAD_STATUSES: LeadStatus[] = [

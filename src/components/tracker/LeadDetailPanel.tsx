@@ -6,7 +6,7 @@ import { GovLead, ServiceCategory, EntityType, ComplianceItem, Interaction, Lead
 import {
   LEAD_STATUSES, SET_ASIDE_LABELS, SOURCE_LABELS, CONTRACT_TYPE_LABELS, DEFAULT_COMPLIANCE_ITEMS,
 } from '@/lib/constants'
-import { formatFullCurrency, validateCategoryNaics } from '@/lib/utils'
+import { formatFullCurrency, validateCategoryNaics, calculateFitScore } from '@/lib/utils'
 import { StatusBadge } from './StatusBadge'
 import { CategoryBadge } from './CategoryBadge'
 import { FitScoreBadge } from './FitScoreBadge'
@@ -190,6 +190,16 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
     }
 
     setSaving(true)
+
+    const leadScore = calculateFitScore({
+      naics_code: form.naics_code ?? lead.naics_code,
+      set_aside: form.set_aside ?? lead.set_aside,
+      place_of_performance: form.place_of_performance ?? lead.place_of_performance,
+      response_deadline: form.response_deadline ?? lead.response_deadline,
+      source: form.source ?? lead.source,
+      estimated_value: form.estimated_value ?? lead.estimated_value,
+    }, entity)
+
     const supabase = createClient()
     const { data, error } = await supabase
       .from('gov_leads')
@@ -225,6 +235,7 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
         contracting_officer_name: form.contracting_officer_name,
         contracting_officer_email: form.contracting_officer_email,
         contracting_officer_phone: form.contracting_officer_phone,
+        fit_score: leadScore,
       })
       .eq('id', lead.id)
       .select('*, service_category:service_categories(*)')

@@ -1,12 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-
-// ── Entity NAICS config ───────────────────────────────────────────────────────
-const ENTITY_NAICS: Record<string, string[]> = {
-  exousia:   ['561720', '561730', '561210', '541614', '541990', '561110'],
-  vitalx:    ['492110', '492210', '621511', '621610', '485991', '485999', '561990'],
-  ironhouse: ['561720', '561730', '561210', '541614', '541990', '561110', '237310'],
-}
+import { ENTITY_NAICS } from '@/lib/constants'
+import { calculateFitScore } from '@/lib/utils'
+import { EntityType, SetAsideType } from '@/lib/types'
 
 const ALL_NAICS = Array.from(new Set(Object.values(ENTITY_NAICS).flat()))
 
@@ -160,26 +156,6 @@ export async function GET(request: Request) {
     return fallback?.id ?? null
   }
 
-  function calcFitScore(entity: string, naicsCode: string | undefined, setAside: string, placeOfPerf: string, deadline: string | undefined): number {
-    let score = 0
-    if (setAside === 'wosb' || setAside === 'edwosb') score += 35
-    else if (setAside === 'small_business' || setAside === 'total_small_business') score += 22
-    else if (setAside === 'sole_source') score += 12
-    else if (setAside === 'full_and_open') score += 5
-    if (naicsCode && ENTITY_NAICS[entity]?.includes(naicsCode)) score += 25
-    const loc = placeOfPerf.toLowerCase()
-    if (['spotsylvania', 'fredericksburg', 'stafford', 'prince william', 'fairfax', 'loudoun', 'arlington', 'alexandria'].some(s => loc.includes(s))) score += 20
-    else if (loc.includes('virginia') || loc.includes(' va ') || loc.includes(', va')) score += 16
-    else if (loc.includes('maryland') || loc.includes('district of columbia') || loc.includes(' dc')) score += 12
-    else if (loc.includes('nationwide') || loc.includes('remote') || loc === '') score += 8
-    if (deadline) {
-      const daysLeft = Math.ceil((new Date(deadline).getTime() - Date.now()) / 86_400_000)
-      if (daysLeft >= 14) score += 5
-      else if (daysLeft >= 7) score += 3
-      else if (daysLeft >= 3) score += 1
-    }
-    return Math.min(score, 100)
-  }
 
   // ── Fetch opportunities ───────────────────────────────────────────────────
   const postedFrom = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
@@ -247,7 +223,7 @@ export async function GET(request: Request) {
 
     if (!noticeId && !solNum) { skippedMalformed++; continue }
 
-    const targetEntities = Object.keys(ENTITY_NAICS).filter(
+    const targetEntities = (Object.keys(ENTITY_NAICS) as EntityType[]).filter(
       e => naicsCode && ENTITY_NAICS[e].includes(naicsCode)
     )
     if (targetEntities.length === 0) { skippedNoEntity++; continue }
@@ -272,7 +248,14 @@ export async function GET(request: Request) {
     if (dryRun) { inserted += targetEntities.length; continue }
 
     for (const entity of targetEntities) {
-      const fitScore   = calcFitScore(entity, naicsCode, setAside, placeOfPerf, deadline)
+      const fitScore   = calculateFitScore({
+        naics_code: naicsCode ?? undefined,
+        set_aside: setAside as SetAsideType,
+        place_of_performance: placeOfPerf || undefined,
+        response_deadline: deadline || undefined,
+        source: 'sam_gov',
+        estimated_value: undefined,
+      }, entity as EntityType)
       const categoryId = findCategoryId(entity, naicsCode, title)
 
       const leadData = {

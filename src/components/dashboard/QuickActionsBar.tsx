@@ -95,6 +95,52 @@ export function QuickActionsBar() {
           Add Contact
         </button>
 
+        {/* Run SAM.gov cron import */}
+        <button
+          onClick={async () => {
+            setSavedMsg('Running SAM.gov feed...')
+            try {
+              const response = await fetch('/api/cron/sam-feed')
+              const json = await response.json()
+              if (response.ok) {
+                setSavedMsg(`SAM feed: ${json.inserted ?? 0} inserted, ${json.updated ?? 0} updated`)
+              } else {
+                setSavedMsg(`SAM feed failed: ${json.error ?? response.statusText}`)
+              }
+            } catch (err) {
+              setSavedMsg(`SAM feed error: ${String(err)}`)
+            }
+            setTimeout(() => setSavedMsg(null), 4000)
+          }}
+          className={`${btnBase} border border-[#374151] text-gray-300 hover:text-white hover:bg-[#374151]`}
+        >
+          <Check size={12} />
+          Run SAM.gov Feed
+        </button>
+
+        {/* Rescore all leads */}
+        <button
+          onClick={async () => {
+            setSavedMsg('Rescoring leads...')
+            try {
+              const response = await fetch('/api/leads/rescore', { method: 'POST' })
+              const json = await response.json()
+              if (response.ok) {
+                setSavedMsg(`Rescored ${json.updatedGov} gov leads, ${json.updatedComm} commercial leads`)
+              } else {
+                setSavedMsg(`Rescore failed: ${json.error ?? response.statusText}`)
+              }
+            } catch (err) {
+              setSavedMsg(`Rescore error: ${String(err)}`)
+            }
+            setTimeout(() => setSavedMsg(null), 4000)
+          }}
+          className={`${btnBase} border border-[#374151] text-gray-300 hover:text-white hover:bg-[#374151]`}
+        >
+          <Check size={12} />
+          Rescore All Leads
+        </button>
+
         {/* Add Subcontractor */}
         <button
           onClick={() => setShowAddSub(true)}

@@ -1,21 +1,21 @@
 import { differenceInDays, parseISO } from 'date-fns'
-import { GovLead, EntityType, ServiceCategory } from './types'
+import { GovLead, CommercialLead, EntityType, ServiceCategory, SourceType } from './types'
 import { ENTITY_NAICS } from './constants'
 
 export function calculateFitScore(lead: Partial<GovLead>, entity: EntityType): number {
   let score = 0
 
-  // Set-aside match (0–35 points) — WOSB/EDWOSB is top priority (Exousia + VitalX are WOSB-certified)
-  if (lead.set_aside === 'wosb' || lead.set_aside === 'edwosb') score += 35
-  else if (lead.set_aside === 'small_business' || lead.set_aside === 'total_small_business') score += 22
-  else if (lead.set_aside === 'sole_source') score += 12
+  // Set-aside match (0–30 points)
+  if (lead.set_aside === 'wosb' || lead.set_aside === 'edwosb') score += 30
+  else if (lead.set_aside === 'small_business' || lead.set_aside === 'total_small_business') score += 20
+  else if (lead.set_aside === 'sole_source' || lead.set_aside === 'hubzone' || lead.set_aside === '8a' || lead.set_aside === 'sdvosb') score += 15
   else if (lead.set_aside === 'full_and_open') score += 5
 
-  // NAICS match (0–25 points) — primary code required
+  // NAICS match (0–25 points)
   const entityNaics = ENTITY_NAICS[entity]
   if (lead.naics_code && entityNaics.includes(lead.naics_code)) score += 25
 
-  // Location (0–20 points) — local competition is lower; proximity matters
+  // Location (0–20 points)
   const loc = (lead.place_of_performance ?? '').toLowerCase()
   if (
     loc.includes('spotsylvania') || loc.includes('fredericksburg') || loc.includes('stafford') ||
@@ -35,13 +35,48 @@ export function calculateFitScore(lead: Partial<GovLead>, entity: EntityType): n
   else if (val > 750_000 && val <= 2_000_000) score += 10
   else if (val > 0 && val < 25_000) score += 3
 
-  // Time to respond (0–5 points)
+  // Time to respond (0–10 points)
   if (lead.response_deadline) {
     const daysLeft = differenceInDays(parseISO(lead.response_deadline), new Date())
-    if (daysLeft >= 14) score += 5
-    else if (daysLeft >= 7) score += 3
-    else if (daysLeft >= 3) score += 1
+    if (daysLeft >= 21) score += 10
+    else if (daysLeft >= 14) score += 7
+    else if (daysLeft >= 7) score += 4
+    else if (daysLeft >= 3) score += 2
   }
+
+  // Source bias (0–5 points)
+  const sourcePriority: Record<string, number> = {
+    sam_gov: 5,
+    govwin: 4,
+    usaspending: 4,
+    eva: 3,
+    emma: 3,
+    local_gov: 2,
+    commercial: 2,
+    manual: 1,
+  }
+  score += sourcePriority[lead.source ?? 'manual'] ?? 0
+
+  return Math.min(score, 100)
+}
+
+export function calculateCommercialFitScore(lead: Partial<CommercialLead> & { source?: SourceType }): number {
+  let score = 0
+
+  const estimated = lead.estimated_annual_value ?? 0
+  if (estimated >= 100_000) score += 30
+  else if (estimated >= 60_000) score += 22
+  else if (estimated >= 30_000) score += 15
+  else if (estimated > 0) score += 8
+
+  const status = lead.status
+  if (status === 'prospect') score += 5
+  else if (status === 'outreach') score += 10
+  else if (status === 'proposal') score += 15
+  else if (status === 'negotiation') score += 18
+  else if (status === 'contract') score += 22
+
+  if (lead.source === 'commercial') score += 10
 
   return Math.min(score, 100)
 }
