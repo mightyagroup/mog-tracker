@@ -112,7 +112,7 @@ export default function VitalXPage() {
                 />
               )}
               {govTab === 'pricing' && (
-                <GovPricingCalculator entity="vitalx" accentColor={ACCENT} />
+                <GovPricingCalculator />
               )}
               {govTab === 'contacts' && (
                 <EntityContactsTab entity="vitalx" accentColor={ACCENT} />
@@ -147,7 +147,7 @@ export default function VitalXPage() {
                 />
               )}
               {commercialTab === 'pricing' && (
-                <CommercialPricingCalculator accentColor={ACCENT} />
+                <CommercialPricingCalculator />
               )}
             </main>
           </>

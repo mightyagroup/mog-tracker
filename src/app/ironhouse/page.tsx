@@ -83,7 +83,7 @@ export default function IronHousePage() {
             />
           )}
           {activeTab === 'pricing' && (
-            <GovPricingCalculator entity="ironhouse" accentColor={ACCENT} />
+            <GovPricingCalculator />
           )}
           {activeTab === 'contacts' && (
             <EntityContactsTab entity="ironhouse" accentColor={ACCENT} />

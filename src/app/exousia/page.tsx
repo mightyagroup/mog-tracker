@@ -76,7 +76,7 @@ export default function ExousiaPage() {
             />
           )}
           {activeTab === 'pricing' && (
-            <GovPricingCalculator entity="exousia" accentColor={ACCENT} />
+            <GovPricingCalculator />
           )}
           {activeTab === 'contacts' && (
             <EntityContactsTab entity="exousia" accentColor={ACCENT} />

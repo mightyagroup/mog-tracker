@@ -1,280 +1,430 @@
 'use client'
 
-import { useState, useCallback } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useState, useMemo } from 'react'
 import { Plus, Trash2, Download, Save } from 'lucide-react'
 
-interface LineRow {
-  id: string
-  service: string
-  frequency: string
-  unit_cost: string
-  units: string
-  driver_cost: string
-  fuel_cost: string
-  supply_cost: string
-  other_cost: string
+interface LineItem {
+  serviceDescription: string
+  frequency: 'per_trip' | 'daily' | 'weekly' | 'monthly' | 'per_specimen' | 'per_test'
+  unitCost: number
+  numberOfUnits: number
+  driverCost: number
+  fuelCost: number
+  supplyCost: number
+  otherCost: number
 }
 
 interface CommercialPricingCalculatorProps {
-  accentColor?: string
   commercialLeadId?: string
-}
-
-const FREQUENCIES = [
-  'Per Trip', 'Daily', 'Weekly', 'Monthly', 'Per Specimen', 'Per Test',
-  'Per Patient', 'Per Delivery', 'Hourly', 'Annually',
-]
-
-function newRow(): LineRow {
-  return {
-    id: Math.random().toString(36).slice(2),
-    service: '',
-    frequency: 'Per Trip',
-    unit_cost: '',
-    units: '1',
-    driver_cost: '',
-    fuel_cost: '',
-    supply_cost: '',
-    other_cost: '',
+  initialData?: {
+    lineItems?: LineItem[]
+    overheadPercent?: number
+    notes?: string
   }
+  onSave?: (data: {
+    id: string
+    version: number
+    pricing_data: Record<string, unknown>
+    total_price: number
+    total_cost: number
+    margin_percent: number
+    created_at: string
+  }) => void
 }
 
-function parseNum(s: string): number {
-  const n = parseFloat(s)
-  return isNaN(n) ? 0 : n
+const FREQUENCY_LABELS: Record<string, string> = {
+  per_trip: 'Per Trip',
+  daily: 'Daily',
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+  per_specimen: 'Per Specimen',
+  per_test: 'Per Test',
 }
 
-function fmt(n: number): string {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(n)
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(value)
 }
 
-function rowTotals(row: LineRow) {
-  const unitCost = parseNum(row.unit_cost)
-  const units = parseNum(row.units)
-  const driver = parseNum(row.driver_cost)
-  const fuel = parseNum(row.fuel_cost)
-  const supply = parseNum(row.supply_cost)
-  const other = parseNum(row.other_cost)
-
-  const revenue = unitCost * units
-  const totalCost = (driver + fuel + supply + other) * units
-  const grossMargin = revenue - totalCost
-
-  return { revenue, totalCost, grossMargin }
-}
-
-export function CommercialPricingCalculator({ accentColor = '#06A59A', commercialLeadId }: CommercialPricingCalculatorProps) {
-  const [lines, setLines] = useState<LineRow[]>([newRow()])
-  const [overheadPct, setOverheadPct] = useState('20')
-  const [notes, setNotes] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-
-  const addLine = useCallback(() => setLines(prev => [...prev, newRow()]), [])
-  const removeLine = useCallback((id: string) => setLines(prev => prev.filter(r => r.id !== id)), [])
-  const updateLine = useCallback((id: string, field: keyof LineRow, value: string) => {
-    setLines(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r))
-  }, [])
-
-  const lineSums = lines.map(rowTotals)
-  const totalRevenue = lineSums.reduce((s, r) => s + r.revenue, 0)
-  const totalDirectCost = lineSums.reduce((s, r) => s + r.totalCost, 0)
-  const totalGrossMargin = totalRevenue - totalDirectCost
-  const grossMarginPct = totalRevenue > 0 ? (totalGrossMargin / totalRevenue) * 100 : 0
-  const overheadAmount = totalRevenue * (parseNum(overheadPct) / 100)
-  const netMargin = totalGrossMargin - overheadAmount
-  const netMarginPct = totalRevenue > 0 ? (netMargin / totalRevenue) * 100 : 0
-
-  async function handleSave() {
-    setSaving(true)
-    const supabase = createClient()
-    const pricingData = {
-      lines: lines.map((r, i) => ({ ...r, ...lineSums[i] })),
-      summary: { totalRevenue, totalDirectCost, totalGrossMargin, grossMarginPct, overheadPct, overheadAmount, netMargin, netMarginPct },
-    }
-    await supabase.from('pricing_records').insert({
-      entity: 'vitalx',
-      pricing_type: 'commercial',
-      commercial_lead_id: commercialLeadId ?? null,
-      pricing_data: pricingData,
-      total_price: totalRevenue,
-      total_cost: totalDirectCost + overheadAmount,
-      margin_percent: netMarginPct,
-      notes: notes || null,
-    })
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
-  }
-
-  function exportCSV() {
-    const headers = ['Service', 'Frequency', 'Unit Cost', 'Units', 'Revenue', 'Driver Cost', 'Fuel Cost', 'Supply Cost', 'Other Cost', 'Total Cost', 'Gross Margin']
-    const rows = lines.map((r, i) => {
-      const t = lineSums[i]
-      return [r.service, r.frequency, r.unit_cost, r.units, fmt(t.revenue), r.driver_cost, r.fuel_cost, r.supply_cost, r.other_cost, fmt(t.totalCost), fmt(t.grossMargin)]
-    })
-    const summary = [
-      [], ['', '', '', '', '', '', '', '', 'Total Revenue', fmt(totalRevenue)],
-      ['', '', '', '', '', '', '', '', 'Total Direct Cost', fmt(totalDirectCost)],
-      ['', '', '', '', '', '', '', '', 'Gross Margin', `${grossMarginPct.toFixed(1)}%`],
-      ['', '', '', '', '', '', '', '', `Overhead (${overheadPct}%)`, fmt(overheadAmount)],
-      ['', '', '', '', '', '', '', '', 'Net Margin', `${netMarginPct.toFixed(1)}%`],
+export function CommercialPricingCalculator({ commercialLeadId, initialData, onSave }: CommercialPricingCalculatorProps) {
+  const [lineItems, setLineItems] = useState<LineItem[]>(
+    initialData?.lineItems || [
+      {
+        serviceDescription: '',
+        frequency: 'per_trip' as const,
+        unitCost: 0,
+        numberOfUnits: 1,
+        driverCost: 0,
+        fuelCost: 0,
+        supplyCost: 0,
+        otherCost: 0,
+      },
     ]
-    const csv = [headers, ...rows, ...summary]
-      .map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
-      .join('\n')
+  )
+
+  const [overheadPercent, setOverheadPercent] = useState(initialData?.overheadPercent || 8)
+  const [notes, setNotes] = useState(initialData?.notes || '')
+  const [saving, setSaving] = useState(false)
+
+  // Calculate line item totals
+  const lineTotals = useMemo(() => {
+    return lineItems.map(item => {
+      const revenue = item.unitCost * item.numberOfUnits
+      const totalCost = item.driverCost + item.fuelCost + item.supplyCost + item.otherCost
+      const grossMarginDollars = revenue - totalCost
+      const grossMarginPercent = revenue > 0 ? (grossMarginDollars / revenue) * 100 : 0
+      return { revenue, totalCost, grossMarginDollars, grossMarginPercent }
+    })
+  }, [lineItems])
+
+  // Calculate summary totals
+  const { totalRevenue, totalCost, totalGrossMargin, totalGrossMarginPercent, totalOverhead, netMargin, netMarginPercent } = useMemo(() => {
+    const revenue = lineTotals.reduce((sum, l) => sum + l.revenue, 0)
+    const cost = lineTotals.reduce((sum, l) => sum + l.totalCost, 0)
+    const grossMargin = revenue - cost
+    const grossMarginPct = revenue > 0 ? (grossMargin / revenue) * 100 : 0
+
+    const overhead = (revenue * overheadPercent) / 100
+    const net = grossMargin - overhead
+    const netPct = revenue > 0 ? (net / revenue) * 100 : 0
+
+    return {
+      totalRevenue: revenue,
+      totalCost: cost,
+      totalGrossMargin: grossMargin,
+      totalGrossMarginPercent: grossMarginPct,
+      totalOverhead: overhead,
+      netMargin: net,
+      netMarginPercent: netPct,
+    }
+  }, [lineTotals, overheadPercent])
+
+  const handleAddLineItem = () => {
+    setLineItems([
+      ...lineItems,
+      {
+        serviceDescription: '',
+        frequency: 'per_trip' as const,
+        unitCost: 0,
+        numberOfUnits: 1,
+        driverCost: 0,
+        fuelCost: 0,
+        supplyCost: 0,
+        otherCost: 0,
+      },
+    ])
+  }
+
+  const handleRemoveLineItem = (index: number) => {
+    setLineItems(lineItems.filter((_, i) => i !== index))
+  }
+
+  const handleLineChange = (index: number, field: keyof LineItem, value: string | number) => {
+    const updated = [...lineItems]
+    updated[index] = { ...updated[index], [field]: value }
+    setLineItems(updated)
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const response = await fetch('/api/pricing/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          commercialLeadId,
+          pricingType: 'commercial',
+          pricingData: { lineItems, overheadPercent },
+          totalPrice: totalRevenue,
+          totalCost: totalCost,
+          marginPercent: totalGrossMarginPercent,
+          notes,
+        }),
+      })
+      if (response.ok) {
+        const data = await response.json()
+        alert(`Pricing saved (version ${data.data.version})`)
+        onSave?.(data.data)
+      } else {
+        alert('Failed to save pricing')
+      }
+    } catch (error) {
+      console.error('Save error:', error)
+      alert('Error saving pricing')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleExport = () => {
+    const rows = [
+      ['Commercial Pricing Calculator'],
+      [],
+      ['Service Description', 'Frequency', 'Unit Cost', 'Number of Units', 'Revenue', 'Driver Cost', 'Fuel Cost', 'Supply Cost', 'Other Cost', 'Total Cost', 'Gross Margin ($)', 'Gross Margin (%)'],
+      ...lineItems.map((item, idx) => {
+        const total = lineTotals[idx]
+        return [
+          item.serviceDescription,
+          FREQUENCY_LABELS[item.frequency],
+          item.unitCost,
+          item.numberOfUnits,
+          total.revenue,
+          item.driverCost,
+          item.fuelCost,
+          item.supplyCost,
+          item.otherCost,
+          total.totalCost,
+          total.grossMarginDollars,
+          total.grossMarginPercent.toFixed(1) + '%',
+        ]
+      }),
+      [],
+      ['Summary'],
+      ['Total Revenue', totalRevenue],
+      ['Total Cost', totalCost],
+      ['Total Gross Margin ($)', totalGrossMargin],
+      ['Total Gross Margin (%)', totalGrossMarginPercent.toFixed(1) + '%'],
+      ['Overhead %', overheadPercent.toFixed(1)],
+      ['Total Overhead', totalOverhead],
+      ['Net Margin ($)', netMargin],
+      ['Net Margin (%)', netMarginPercent.toFixed(1) + '%'],
+    ]
+
+    const csv = rows.map(row => row.map(cell => (typeof cell === 'string' ? `"${cell}"` : cell)).join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `commercial-pricing-${new Date().toISOString().slice(0, 10)}.csv`
+    a.download = `commercial-pricing-${new Date().toISOString().split('T')[0]}.csv`
     a.click()
-    URL.revokeObjectURL(url)
   }
 
-  const inp = 'w-full bg-[#111827] border border-[#374151] rounded px-2 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-1 transition text-right'
-
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-white font-semibold">Commercial Pricing Calculator</h2>
-          <p className="text-gray-500 text-xs mt-0.5">Per-service pricing for commercial contracts</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={exportCSV} className="flex items-center gap-1.5 px-3 py-2 border border-[#374151] text-gray-400 hover:text-white hover:bg-[#374151] rounded-lg text-sm transition">
-            <Download size={14} /> Export CSV
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-1.5 px-4 py-2 font-semibold text-sm rounded-lg text-[#111827] disabled:opacity-50 transition"
-            style={{ backgroundColor: accentColor }}
-          >
-            <Save size={14} />
-            {saved ? 'Saved ✓' : saving ? 'Saving…' : 'Save Version'}
-          </button>
-        </div>
-      </div>
+    <div className="space-y-6 p-4 bg-gray-900 rounded-lg border border-gray-700">
+      <h2 className="text-xl font-bold text-white">Commercial Pricing Calculator</h2>
 
-      {/* Line items table */}
-      <div className="bg-[#1F2937] rounded-xl border border-[#374151] overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[#374151] bg-[#161E2E]">
-                <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-400">Service Description</th>
-                <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-400 w-28">Frequency</th>
-                <th className="px-3 py-2.5 text-right text-xs font-medium text-gray-400 w-28">Unit Revenue ($)</th>
-                <th className="px-3 py-2.5 text-right text-xs font-medium text-gray-400 w-20">Units</th>
-                <th className="px-3 py-2.5 text-right text-xs font-medium text-gray-400 w-24">Driver ($)</th>
-                <th className="px-3 py-2.5 text-right text-xs font-medium text-gray-400 w-24">Fuel ($)</th>
-                <th className="px-3 py-2.5 text-right text-xs font-medium text-gray-400 w-24">Supply ($)</th>
-                <th className="px-3 py-2.5 text-right text-xs font-medium text-gray-400 w-24">Other ($)</th>
-                <th className="px-3 py-2.5 text-right text-xs font-medium text-gray-400 w-24">Revenue</th>
-                <th className="px-3 py-2.5 text-right text-xs font-medium text-gray-400 w-24">Gross Margin</th>
-                <th className="w-10" />
+      {/* Line Items Table */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm border-collapse text-gray-300">
+          <thead>
+            <tr className="bg-gray-800 border border-gray-700">
+              <th className="px-2 py-2 text-left">Service Description</th>
+              <th className="px-2 py-2 text-left">Frequency</th>
+              <th className="px-2 py-2 text-right">Unit Cost</th>
+              <th className="px-2 py-2 text-right">Units</th>
+              <th className="px-2 py-2 text-right">Revenue</th>
+              <th className="px-2 py-2 text-right">Gross Margin</th>
+              <th className="px-2 py-2 text-center w-10"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-700">
+            {lineItems.map((item, idx) => (
+              <tr key={idx} className="hover:bg-gray-800 transition border-b border-gray-700">
+                <td className="px-2 py-2">
+                  <input
+                    value={item.serviceDescription}
+                    onChange={e => handleLineChange(idx, 'serviceDescription', e.target.value)}
+                    placeholder="e.g., Medical Courier Service"
+                    className="w-full px-2 py-1 bg-gray-700 text-white rounded text-xs"
+                  />
+                </td>
+                <td className="px-2 py-2">
+                  <select
+                    value={item.frequency}
+                    onChange={e => handleLineChange(idx, 'frequency', e.target.value)}
+                    className="px-2 py-1 bg-gray-700 text-white rounded text-xs"
+                  >
+                    {Object.entries(FREQUENCY_LABELS).map(([key, label]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                </td>
+                <td className="px-2 py-2">
+                  <input
+                    type="number"
+                    value={item.unitCost}
+                    onChange={e => handleLineChange(idx, 'unitCost', parseFloat(e.target.value) || 0)}
+                    className="w-20 px-2 py-1 bg-gray-700 text-white rounded text-xs text-right"
+                  />
+                </td>
+                <td className="px-2 py-2">
+                  <input
+                    type="number"
+                    value={item.numberOfUnits}
+                    onChange={e => handleLineChange(idx, 'numberOfUnits', parseFloat(e.target.value) || 0)}
+                    className="w-16 px-2 py-1 bg-gray-700 text-white rounded text-xs text-right"
+                  />
+                </td>
+                <td className="px-2 py-2 text-right font-mono text-xs font-bold text-teal-400">
+                  {formatCurrency(lineTotals[idx].revenue)}
+                </td>
+                <td className="px-2 py-2 text-right font-mono text-xs">
+                  <span className={lineTotals[idx].grossMarginPercent >= 30 ? 'text-green-400' : 'text-yellow-400'}>
+                    {formatCurrency(lineTotals[idx].grossMarginDollars)}
+                  </span>
+                </td>
+                <td className="px-2 py-2 text-center">
+                  <button
+                    onClick={() => handleRemoveLineItem(idx)}
+                    className="text-red-400 hover:text-red-300 transition"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-[#374151]">
-              {lines.map((row, i) => {
-                const t = lineSums[i]
-                const marginPct = t.revenue > 0 ? (t.grossMargin / t.revenue) * 100 : 0
-                return (
-                  <tr key={row.id} className="hover:bg-[#253347]">
-                    <td className="px-3 py-2">
-                      <input className={`${inp} text-left`} value={row.service} onChange={e => updateLine(row.id, 'service', e.target.value)} placeholder="e.g., Specimen courier — hospital to lab" />
-                    </td>
-                    <td className="px-3 py-2">
-                      <select className={`${inp} text-left`} value={row.frequency} onChange={e => updateLine(row.id, 'frequency', e.target.value)}>
-                        {FREQUENCIES.map(f => <option key={f}>{f}</option>)}
-                      </select>
-                    </td>
-                    <td className="px-3 py-2"><input className={inp} type="number" min="0" step="0.01" value={row.unit_cost} onChange={e => updateLine(row.id, 'unit_cost', e.target.value)} placeholder="0.00" /></td>
-                    <td className="px-3 py-2"><input className={inp} type="number" min="0" value={row.units} onChange={e => updateLine(row.id, 'units', e.target.value)} /></td>
-                    <td className="px-3 py-2"><input className={inp} type="number" min="0" step="0.01" value={row.driver_cost} onChange={e => updateLine(row.id, 'driver_cost', e.target.value)} placeholder="0.00" /></td>
-                    <td className="px-3 py-2"><input className={inp} type="number" min="0" step="0.01" value={row.fuel_cost} onChange={e => updateLine(row.id, 'fuel_cost', e.target.value)} placeholder="0.00" /></td>
-                    <td className="px-3 py-2"><input className={inp} type="number" min="0" step="0.01" value={row.supply_cost} onChange={e => updateLine(row.id, 'supply_cost', e.target.value)} placeholder="0.00" /></td>
-                    <td className="px-3 py-2"><input className={inp} type="number" min="0" step="0.01" value={row.other_cost} onChange={e => updateLine(row.id, 'other_cost', e.target.value)} placeholder="0.00" /></td>
-                    <td className="px-3 py-2 text-right font-mono text-xs text-gray-200 whitespace-nowrap">{fmt(t.revenue)}</td>
-                    <td className="px-3 py-2 text-right font-mono text-xs whitespace-nowrap">
-                      <span className={marginPct >= 20 ? 'text-green-400' : marginPct >= 10 ? 'text-yellow-400' : 'text-red-400'}>
-                        {fmt(t.grossMargin)} ({marginPct.toFixed(0)}%)
-                      </span>
-                    </td>
-                    <td className="px-3 py-2">
-                      <button onClick={() => removeLine(row.id)} className="text-gray-600 hover:text-red-400 transition"><Trash2 size={14} /></button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-        <div className="px-4 py-3 border-t border-[#374151]">
-          <button onClick={addLine} className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition">
-            <Plus size={14} /> Add Service Line
-          </button>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Add Line Item Button */}
+      <button
+        onClick={handleAddLineItem}
+        className="flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded transition"
+      >
+        <Plus size={16} />
+        Add Line Item
+      </button>
+
+      {/* Cost Breakdown Grid */}
+      <div>
+        <h3 className="text-lg font-semibold text-white mb-3">Cost Breakdown by Line</h3>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {lineItems.map((item, idx) => (
+            <div key={idx} className="bg-gray-800 p-4 rounded border border-gray-700">
+              <h4 className="font-semibold text-white mb-3 text-sm">{item.serviceDescription || 'Untitled Service'}</h4>
+              <div className="space-y-2 text-sm">
+                <div className="flex gap-2">
+                  <label className="text-gray-400 w-32">Driver Cost:</label>
+                  <input
+                    type="number"
+                    value={item.driverCost}
+                    onChange={e => handleLineChange(idx, 'driverCost', parseFloat(e.target.value) || 0)}
+                    className="flex-1 px-2 py-1 bg-gray-700 text-white rounded text-xs"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <label className="text-gray-400 w-32">Fuel Cost:</label>
+                  <input
+                    type="number"
+                    value={item.fuelCost}
+                    onChange={e => handleLineChange(idx, 'fuelCost', parseFloat(e.target.value) || 0)}
+                    className="flex-1 px-2 py-1 bg-gray-700 text-white rounded text-xs"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <label className="text-gray-400 w-32">Supply Cost:</label>
+                  <input
+                    type="number"
+                    value={item.supplyCost}
+                    onChange={e => handleLineChange(idx, 'supplyCost', parseFloat(e.target.value) || 0)}
+                    className="flex-1 px-2 py-1 bg-gray-700 text-white rounded text-xs"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <label className="text-gray-400 w-32">Other Cost:</label>
+                  <input
+                    type="number"
+                    value={item.otherCost}
+                    onChange={e => handleLineChange(idx, 'otherCost', parseFloat(e.target.value) || 0)}
+                    className="flex-1 px-2 py-1 bg-gray-700 text-white rounded text-xs"
+                  />
+                </div>
+                <div className="border-t border-gray-600 pt-2 mt-2">
+                  <div className="text-gray-300 flex justify-between">
+                    <span>Revenue:</span>
+                    <span className="font-mono">{formatCurrency(lineTotals[idx].revenue)}</span>
+                  </div>
+                  <div className="text-gray-300 flex justify-between">
+                    <span>Total Cost:</span>
+                    <span className="font-mono">{formatCurrency(lineTotals[idx].totalCost)}</span>
+                  </div>
+                  <div className="text-white font-semibold flex justify-between">
+                    <span>Gross Margin:</span>
+                    <span className="font-mono text-teal-400">{formatCurrency(lineTotals[idx].grossMarginDollars)} ({lineTotals[idx].grossMarginPercent.toFixed(1)}%)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Summary */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Overhead + notes */}
-        <div className="bg-[#1F2937] rounded-xl border border-[#374151] p-5">
-          <h3 className="text-white font-medium text-sm mb-4">Overhead &amp; Settings</h3>
-          <div className="flex items-center justify-between gap-4 mb-4">
-            <label className="text-gray-400 text-sm">Overhead / Admin (%)</label>
-            <input
-              type="number" min="0" max="100" step="0.5"
-              className="w-24 bg-[#111827] border border-[#374151] rounded px-3 py-1.5 text-sm text-white text-right focus:outline-none"
-              value={overheadPct}
-              onChange={e => setOverheadPct(e.target.value)}
-            />
+      {/* Summary Section */}
+      <div className="bg-gray-800 p-6 rounded border border-gray-700 space-y-4">
+        <h3 className="text-lg font-bold text-white">Pricing Summary</h3>
+
+        <div>
+          <label className="text-gray-400 text-sm">Overhead %:</label>
+          <input
+            type="number"
+            value={overheadPercent}
+            onChange={e => setOverheadPercent(parseFloat(e.target.value) || 0)}
+            className="w-full px-3 py-2 bg-gray-700 text-white rounded"
+          />
+          <p className="text-gray-500 text-xs mt-1">Applied against total revenue</p>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+          <div className="bg-gray-900 p-3 rounded">
+            <div className="text-gray-400 text-xs">Total Revenue</div>
+            <div className="text-white font-mono font-bold text-lg text-teal-400">{formatCurrency(totalRevenue)}</div>
           </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1.5">Version Notes</label>
-            <textarea
-              className="w-full bg-[#111827] border border-[#374151] rounded px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none resize-none"
-              rows={2}
-              placeholder="e.g., Proposal pricing for Quest Diagnostics, Q2 2025"
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-            />
+          <div className="bg-gray-900 p-3 rounded">
+            <div className="text-gray-400 text-xs">Total Cost</div>
+            <div className="text-white font-mono font-bold">{formatCurrency(totalCost)}</div>
+          </div>
+          <div className="bg-gray-900 p-3 rounded">
+            <div className="text-gray-400 text-xs">Gross Margin</div>
+            <div className="text-white font-mono font-bold">{formatCurrency(totalGrossMargin)}</div>
+            <div className="text-xs mt-1" style={{ color: totalGrossMarginPercent >= 30 ? '#4ade80' : '#eab308' }}>
+              {totalGrossMarginPercent.toFixed(1)}%
+            </div>
+          </div>
+          <div className="bg-gray-900 p-3 rounded">
+            <div className="text-gray-400 text-xs">Total Overhead</div>
+            <div className="text-white font-mono font-bold">{formatCurrency(totalOverhead)}</div>
           </div>
         </div>
 
-        {/* Totals */}
-        <div className="bg-[#1F2937] rounded-xl border border-[#374151] p-5">
-          <h3 className="text-white font-medium text-sm mb-4">Pricing Summary</h3>
-          <div className="space-y-2">
-            <SRow label="Total Revenue" value={fmt(totalRevenue)} />
-            <SRow label="Total Direct Cost" value={fmt(totalDirectCost)} />
-            <SRow label="Gross Margin" value={`${fmt(totalGrossMargin)} (${grossMarginPct.toFixed(1)}%)`} highlight={grossMarginPct >= 20 ? 'green' : grossMarginPct >= 10 ? 'yellow' : 'red'} />
-            <SRow label={`Overhead (${overheadPct}%)`} value={fmt(overheadAmount)} />
-            <div className="border-t border-[#374151] pt-3 mt-3">
-              <div className="flex items-center justify-between">
-                <span className="text-white font-semibold">Net Margin</span>
-                <span className="font-bold text-lg font-mono" style={{ color: netMarginPct >= 15 ? '#4ADE80' : netMarginPct >= 5 ? '#FCD34D' : '#FCA5A5' }}>
-                  {fmt(netMargin)} ({netMarginPct.toFixed(1)}%)
-                </span>
-              </div>
+        <div className="bg-gradient-to-r from-teal-600 to-teal-700 p-4 rounded">
+          <div className="flex justify-between items-center">
+            <div>
+              <div className="text-teal-100 text-sm">Net Margin</div>
+              <div className="text-white text-3xl font-bold font-mono">{formatCurrency(netMargin)}</div>
+              <div className="text-teal-200 text-sm mt-1">{netMarginPercent.toFixed(1)}% of revenue</div>
             </div>
           </div>
         </div>
-      </div>
-    </div>
-  )
-}
 
-function SRow({ label, value, highlight }: { label: string; value: string; highlight?: 'green' | 'yellow' | 'red' }) {
-  const color = highlight === 'green' ? '#4ADE80' : highlight === 'yellow' ? '#FCD34D' : highlight === 'red' ? '#FCA5A5' : undefined
-  return (
-    <div className="flex items-center justify-between py-1 border-b border-[#374151] last:border-0">
-      <span className="text-gray-400 text-sm">{label}</span>
-      <span className="text-sm font-mono" style={color ? { color } : { color: '#E5E7EB' }}>{value}</span>
+        <div>
+          <label className="text-gray-400 text-sm">Notes:</label>
+          <textarea
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            placeholder="Service assumptions, volume projections, seasonal adjustments, etc."
+            className="w-full h-20 px-3 py-2 bg-gray-700 text-white rounded resize-none"
+          />
+        </div>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex gap-3">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded transition"
+        >
+          <Save size={16} />
+          {saving ? 'Saving...' : 'Save Pricing'}
+        </button>
+        <button
+          onClick={handleExport}
+          className="flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded transition"
+        >
+          <Download size={16} />
+          Export CSV
+        </button>
+      </div>
     </div>
   )
 }
