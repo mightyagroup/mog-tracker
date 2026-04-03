@@ -345,7 +345,6 @@ export default async function CommandCenterPage() {
             statusData={statusBreakdown.map(s => ({ name: s.label, value: s.count }))}
             categoryData={categoryBreakdown.map(c => ({ name: c.name, value: c.count }))}
             sourceData={sourceBreakdown.map(s => ({ name: s.source, value: s.count }))}
-            formatPipeline={formatPipeline}
           />
 
           {/* Recent activity */}

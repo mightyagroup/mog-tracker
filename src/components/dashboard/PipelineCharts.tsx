@@ -27,10 +27,15 @@ interface PipelineChartsProps {
   statusData: Array<{ name: string; value: number }>
   categoryData: Array<{ name: string; value: number }>
   sourceData: Array<{ name: string; value: number }>
-  formatPipeline: (value: number) => string
 }
 
-export function PipelineCharts({ pipelineData, statusData, categoryData, sourceData, formatPipeline }: PipelineChartsProps) {
+function formatPipeline(v: number): string {
+  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`
+  if (v >= 1_000) return `$${(v / 1_000).toFixed(0)}K`
+  return v === 0 ? '$0' : `$${v}`
+}
+
+export function PipelineCharts({ pipelineData, statusData, categoryData, sourceData }: PipelineChartsProps) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
       {/* Pipeline Value by Entity */}
