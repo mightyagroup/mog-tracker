@@ -13,7 +13,7 @@ import { CommercialDetailPanel } from './CommercialDetailPanel'
 import { EmptyState } from '@/components/common/EmptyState'
 import { LoadingPage } from '@/components/common/LoadingSpinner'
 import { Modal } from '@/components/common/Modal'
-import { Plus, Search, X, Building2, ChevronDown } from 'lucide-react'
+import { Plus, Search, X, Building2, ChevronDown, Radar, Loader2, CheckCircle2, MapPin } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 
 interface CommercialLeadsTableProps {
@@ -32,6 +32,7 @@ export function CommercialLeadsTable({ presetStatuses, title, accentColor = '#06
   const [statusFilter, setStatusFilter] = useState('')
   const [selectedLead, setSelectedLead] = useState<CommercialLead | null>(null)
   const [showAdd, setShowAdd] = useState(false)
+  const [showDiscover, setShowDiscover] = useState(false)
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchLeads() }, [])
@@ -112,8 +113,16 @@ export function CommercialLeadsTable({ presetStatuses, title, accentColor = '#06
         </select>
 
         <button
+          onClick={() => setShowDiscover(true)}
+          className="flex items-center gap-2 px-4 py-2 font-semibold text-sm rounded-lg text-white ml-auto border border-[#374151] bg-[#1F2937] hover:bg-[#374151] transition"
+        >
+          <Radar size={15} />
+          Discover Prospects
+        </button>
+
+        <button
           onClick={() => setShowAdd(true)}
-          className="flex items-center gap-2 px-4 py-2 font-semibold text-sm rounded-lg text-[#111827] ml-auto"
+          className="flex items-center gap-2 px-4 py-2 font-semibold text-sm rounded-lg text-[#111827]"
           style={{ backgroundColor: accentColor }}
         >
           <Plus size={15} />
@@ -207,6 +216,14 @@ export function CommercialLeadsTable({ presetStatuses, title, accentColor = '#06
           accentColor={accentColor}
           onClose={() => setShowAdd(false)}
           onSave={handleAdd}
+        />
+      )}
+
+      {showDiscover && (
+        <DiscoverProspectsModal
+          accentColor={accentColor}
+          onClose={() => setShowDiscover(false)}
+          onImported={() => { setShowDiscover(false); fetchLeads() }}
         />
       )}
     </div>
@@ -331,6 +348,261 @@ function AddCommercialLeadModal({ accentColor, onClose, onSave }: { accentColor:
           <F label="Notes"><textarea className={`${inp} resize-none`} rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></F>
         </div>
       </div>
+    </Modal>
+  )
+}
+
+// ── Discover Prospects Modal ─────────────────────────────────────────────────
+
+interface Prospect {
+  organization_name: string
+  contact_name: string | null
+  contact_title: string | null
+  contact_phone: string | null
+  address: string
+  city: string
+  state: string
+  zip: string
+  npi_number: string
+  taxonomy_description: string
+  suggested_category: string
+  source: string
+}
+
+function DiscoverProspectsModal({
+  accentColor,
+  onClose,
+  onImported,
+}: {
+  accentColor: string
+  onClose: () => void
+  onImported: () => void
+}) {
+  const [category, setCategory] = useState('')
+  const [city, setCity] = useState('')
+  const [state, setState] = useState('VA')
+  const [searching, setSearching] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [prospects, setProspects] = useState<Prospect[]>([])
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [hasSearched, setHasSearched] = useState(false)
+  const [importResult, setImportResult] = useState<{ imported: number } | null>(null)
+
+  async function handleSearch() {
+    setSearching(true)
+    setHasSearched(false)
+    setProspects([])
+    setSelected(new Set())
+    setImportResult(null)
+
+    try {
+      const body: Record<string, unknown> = {
+        mode: city ? 'quick' : 'full',
+        autoImport: false,
+      }
+      if (category) body.categories = [category]
+      if (city) body.city = city
+      if (state) body.state = state
+
+      const resp = await fetch('/api/commercial/discover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await resp.json()
+      setProspects(data.prospects || [])
+      setHasSearched(true)
+    } catch (err) {
+      console.error('Discovery failed:', err)
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  function toggleSelect(idx: number) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(idx)) next.delete(idx)
+      else next.add(idx)
+      return next
+    })
+  }
+
+  function toggleAll() {
+    if (selected.size === prospects.length) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(prospects.map((_, i) => i)))
+    }
+  }
+
+  async function handleImport() {
+    if (selected.size === 0) return
+    setImporting(true)
+
+    const toImport = prospects.filter((_, i) => selected.has(i))
+    const supabase = createClient()
+
+    const inserts = toImport.map(p => ({
+      entity: 'vitalx' as const,
+      organization_name: p.organization_name,
+      contact_name: p.contact_name,
+      contact_title: p.contact_title,
+      contact_phone: p.contact_phone,
+      service_category: p.suggested_category,
+      status: 'prospect' as const,
+      notes: [
+        `NPI: ${p.npi_number}`,
+        `Type: ${p.taxonomy_description}`,
+        `Address: ${p.address}, ${p.city}, ${p.state} ${p.zip}`,
+        `Source: NPI Registry auto-discovery`,
+        `Discovered: ${new Date().toISOString().split('T')[0]}`,
+      ].join('\n'),
+    }))
+
+    let imported = 0
+    for (let i = 0; i < inserts.length; i += 20) {
+      const chunk = inserts.slice(i, i + 20)
+      const { data } = await supabase
+        .from('commercial_leads')
+        .insert(chunk)
+        .select('id')
+      imported += data?.length || 0
+    }
+
+    setImportResult({ imported })
+    setImporting(false)
+
+    // If any were imported, refresh the parent table after a short delay
+    if (imported > 0) {
+      setTimeout(() => onImported(), 1500)
+    }
+  }
+
+  const inp = 'w-full bg-[#111827] border border-[#374151] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-1 transition'
+
+  const DMV_CITIES_BY_STATE: Record<string, string[]> = {
+    VA: ['Arlington', 'Alexandria', 'Fairfax', 'Reston', 'Richmond', 'Springfield', 'Woodbridge', 'Manassas', 'Herndon', 'Leesburg', 'McLean', 'Vienna', 'Falls Church', 'Chantilly', 'Ashburn', 'Sterling', 'Fredericksburg'],
+    MD: ['Bethesda', 'Rockville', 'Silver Spring', 'Baltimore', 'Columbia', 'Gaithersburg', 'Laurel', 'Annapolis', 'Frederick', 'Germantown', 'Largo', 'Greenbelt', 'Bowie'],
+    DC: ['Washington'],
+  }
+
+  return (
+    <Modal title="Discover Prospects" onClose={onClose} size="xl" footer={
+      importResult ? (
+        <div className="flex items-center gap-2 text-sm" style={{ color: accentColor }}>
+          <CheckCircle2 size={16} />
+          Imported {importResult.imported} prospects. Refreshing...
+        </div>
+      ) : (
+        <>
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-400 hover:text-white">Cancel</button>
+          {prospects.length > 0 && (
+            <button
+              onClick={handleImport}
+              disabled={importing || selected.size === 0}
+              className="px-5 py-2 font-semibold text-sm rounded-lg text-[#111827] disabled:opacity-50 transition"
+              style={{ backgroundColor: accentColor }}
+            >
+              {importing ? 'Importing...' : `Import ${selected.size} Selected`}
+            </button>
+          )}
+        </>
+      )
+    }>
+      {/* Search Controls */}
+      <div className="mb-4 space-y-3">
+        <p className="text-sm text-gray-400">
+          Search the NPI Registry for healthcare facilities in the DMV area that may need medical courier, specimen transport, or pharmacy delivery services.
+        </p>
+
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Category</label>
+            <select className={inp} value={category} onChange={e => setCategory(e.target.value)}>
+              <option value="">All Categories</option>
+              {VITALX_COMMERCIAL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">State</label>
+            <select className={inp} value={state} onChange={e => { setState(e.target.value); setCity('') }}>
+              <option value="VA">Virginia</option>
+              <option value="MD">Maryland</option>
+              <option value="DC">Washington DC</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">City (optional, faster)</label>
+            <select className={inp} value={city} onChange={e => setCity(e.target.value)}>
+              <option value="">All cities (statewide)</option>
+              {(DMV_CITIES_BY_STATE[state] || []).map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <button
+          onClick={handleSearch}
+          disabled={searching}
+          className="flex items-center gap-2 px-5 py-2 font-semibold text-sm rounded-lg text-[#111827] transition disabled:opacity-50"
+          style={{ backgroundColor: accentColor }}
+        >
+          {searching ? <Loader2 size={15} className="animate-spin" /> : <Radar size={15} />}
+          {searching ? 'Searching NPI Registry...' : 'Search'}
+        </button>
+      </div>
+
+      {/* Results */}
+      {hasSearched && prospects.length === 0 && (
+        <div className="text-center py-8 text-gray-500 text-sm">
+          No new prospects found. Try a different category, city, or state. Organizations already in your database are automatically excluded.
+        </div>
+      )}
+
+      {prospects.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-gray-400">{prospects.length} new prospects found (already deduped against your database)</span>
+            <button onClick={toggleAll} className="text-xs hover:text-white transition" style={{ color: accentColor }}>
+              {selected.size === prospects.length ? 'Deselect All' : 'Select All'}
+            </button>
+          </div>
+
+          <div className="max-h-80 overflow-y-auto border border-[#374151] rounded-lg divide-y divide-[#374151]">
+            {prospects.map((p, idx) => (
+              <label
+                key={idx}
+                className={`flex items-start gap-3 px-4 py-3 cursor-pointer transition ${selected.has(idx) ? 'bg-[#253347]' : 'hover:bg-[#1F2937]'}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.has(idx)}
+                  onChange={() => toggleSelect(idx)}
+                  className="mt-1 accent-[#06A59A]"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="text-white text-sm font-medium">{p.organization_name}</div>
+                  <div className="text-gray-400 text-xs mt-0.5 flex items-center gap-1">
+                    <MapPin size={10} />
+                    {p.city}, {p.state} {p.zip}
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: accentColor + '22', color: accentColor }}>
+                      {p.suggested_category}
+                    </span>
+                    <span className="text-gray-500 text-xs">{p.taxonomy_description}</span>
+                  </div>
+                  {p.contact_name && (
+                    <div className="text-gray-400 text-xs mt-1">
+                      Contact: {p.contact_name}{p.contact_title ? ` (${p.contact_title})` : ''}{p.contact_phone ? ` - ${p.contact_phone}` : ''}
+                    </div>
+                  )}
+                </div>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
     </Modal>
   )
 }

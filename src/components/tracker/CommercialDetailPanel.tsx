@@ -8,7 +8,7 @@ import {
 } from '@/lib/constants'
 import { CommercialStatusBadge } from './CommercialStatusBadge'
 import { formatFullCurrency } from '@/lib/utils'
-import { X, Edit2, Save, ChevronDown, MessageSquare, Plus, ExternalLink } from 'lucide-react'
+import { X, Edit2, Save, ChevronDown, MessageSquare, Plus, ExternalLink, Folder, Loader2 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 
 interface CommercialDetailPanelProps {
@@ -28,6 +28,7 @@ export function CommercialDetailPanel({
   const [newNote, setNewNote] = useState('')
   const [addingNote, setAddingNote] = useState(false)
   const [section, setSection] = useState<'info' | 'outreach' | 'notes'>('info')
+  const [creatingFolder, setCreatingFolder] = useState(false)
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -80,6 +81,29 @@ export function CommercialDetailPanel({
     setSaving(false)
   }
 
+  async function createDriveFolder() {
+    setCreatingFolder(true)
+    try {
+      const resp = await fetch('/api/drive/create-commercial-folder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadId: lead.id }),
+      })
+      const result = await resp.json()
+      if (result.folderUrl) {
+        setForm(f => ({ ...f, drive_folder_url: result.folderUrl }))
+        // Update parent state
+        onUpdate({ ...lead, drive_folder_url: result.folderUrl } as CommercialLead)
+      }
+      return result.folderUrl
+    } catch (err) {
+      console.error('Failed to create Drive folder:', err)
+      return null
+    } finally {
+      setCreatingFolder(false)
+    }
+  }
+
   async function handleStatusChange(newStatus: CommercialStatus) {
     const supabase = createClient()
     const { data } = await supabase
@@ -88,7 +112,15 @@ export function CommercialDetailPanel({
       .eq('id', lead.id)
       .select()
       .single()
-    if (data) { onUpdate(data as CommercialLead); setForm(f => ({ ...f, status: newStatus })) }
+    if (data) {
+      onUpdate(data as CommercialLead)
+      setForm(f => ({ ...f, status: newStatus }))
+
+      // Auto-create Drive folder when moving to outreach or proposal
+      if ((newStatus === 'outreach' || newStatus === 'proposal') && !data.drive_folder_url) {
+        createDriveFolder()
+      }
+    }
   }
 
   async function addNote() {
@@ -223,11 +255,22 @@ export function CommercialDetailPanel({
                   <EField label="Drive Folder URL" value={form.drive_folder_url} editMode type="url" onChange={v => setForm(f => ({ ...f, drive_folder_url: v }))} />
                 </div>
               ) : (
-                <div className="flex gap-3">
+                <div className="flex gap-3 flex-wrap">
                   {lead.proposal_url && <LinkBtn href={lead.proposal_url} label="Proposal" />}
-                  {lead.drive_folder_url && <LinkBtn href={lead.drive_folder_url} label="Drive Folder" />}
+                  {(lead.drive_folder_url || form.drive_folder_url) ? (
+                    <LinkBtn href={form.drive_folder_url || lead.drive_folder_url || ''} label="Drive Folder" />
+                  ) : (
+                    <button
+                      onClick={createDriveFolder}
+                      disabled={creatingFolder}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-900/30 text-blue-400 hover:bg-blue-900/50 border border-blue-800/50 transition disabled:opacity-50"
+                    >
+                      {creatingFolder ? <Loader2 size={13} className="animate-spin" /> : <Folder size={13} />}
+                      {creatingFolder ? 'Creating...' : 'Create Drive Folder'}
+                    </button>
+                  )}
                   {lead.website && <LinkBtn href={lead.website} label="Website" />}
-                  {!lead.proposal_url && !lead.drive_folder_url && !lead.website && <span className="text-gray-600 text-sm">No links added</span>}
+                  {!lead.proposal_url && !lead.drive_folder_url && !form.drive_folder_url && !lead.website && <span className="text-gray-600 text-sm">No links added</span>}
                 </div>
               )}
             </div>
