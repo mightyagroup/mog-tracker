@@ -14,7 +14,7 @@ import { EmptyState } from '@/components/common/EmptyState'
 import { LoadingPage } from '@/components/common/LoadingSpinner'
 import { Modal } from '@/components/common/Modal'
 import { Plus, Search, X, Building2, ChevronDown, Radar, Loader2, CheckCircle2, MapPin } from 'lucide-react'
-import { format, parseISO } from 'date-fns'
+import { format, parseISO, formatDistanceToNowStrict } from 'date-fns'
 
 interface CommercialLeadsTableProps {
   presetStatuses?: CommercialStatus[]
@@ -155,6 +155,7 @@ export function CommercialLeadsTable({ presetStatuses, title, accentColor = '#06
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Est. Value/yr</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Last Contact</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Next Follow-Up</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">First Seen</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#374151]">
@@ -192,6 +193,11 @@ export function CommercialLeadsTable({ presetStatuses, title, accentColor = '#06
                         <span className="text-xs font-medium" style={{ color: accentColor }}>
                           {format(parseISO(lead.next_follow_up), 'MMM d, yy')}
                         </span>
+                      ) : <span className="text-gray-600 text-xs">—</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      {lead.created_at ? (
+                        <CommercialFirstSeenBadge createdAt={lead.created_at} />
                       ) : <span className="text-gray-600 text-xs">—</span>}
                     </td>
                   </tr>
@@ -238,6 +244,38 @@ export function CommercialLeadsTable({ presetStatuses, title, accentColor = '#06
 }
 
 // ── Commercial fit score badge ───────────────────────────────────────────────
+function CommercialFirstSeenBadge({ createdAt }: { createdAt: string }) {
+  const date = parseISO(createdAt)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+  let badgeColor = 'text-gray-500'
+  let bgColor = ''
+  if (diffDays === 0) {
+    badgeColor = 'text-emerald-400'
+    bgColor = 'bg-emerald-400/10'
+  } else if (diffDays <= 2) {
+    badgeColor = 'text-blue-400'
+    bgColor = 'bg-blue-400/10'
+  } else if (diffDays <= 7) {
+    badgeColor = 'text-gray-300'
+  }
+
+  const relative = diffDays === 0
+    ? 'Today'
+    : formatDistanceToNowStrict(date, { addSuffix: true })
+
+  return (
+    <div className="flex flex-col">
+      <span className={`text-xs font-medium ${badgeColor} ${bgColor} ${bgColor ? 'px-1.5 py-0.5 rounded' : ''}`}>
+        {relative}
+      </span>
+      <span className="text-[10px] text-gray-600 mt-0.5">{format(date, 'MMM d, yyyy')}</span>
+    </div>
+  )
+}
+
 function CommercialFitBadge({ score }: { score: number }) {
   const color = score >= 80 ? '#4ADE80' : score >= 65 ? '#FCD34D' : score >= 45 ? '#FB923C' : '#9CA3AF'
   const bg = score >= 80 ? '#4ADE8022' : score >= 65 ? '#FCD34D22' : score >= 45 ? '#FB923C22' : '#9CA3AF22'
@@ -302,7 +340,33 @@ function AddCommercialLeadModal({ accentColor, onClose, onSave }: { accentColor:
       })
       .select()
       .single()
-    if (!error && data) onSave(data as CommercialLead)
+    if (!error && data) {
+      // Auto-create initial summary interaction note
+      const lead = data as CommercialLead
+      const summaryLines: string[] = [
+        `NEW PROSPECT ADDED: ${lead.organization_name}`,
+        '',
+        `Category: ${lead.service_category || 'Not set'}`,
+        `Status: ${lead.status || 'prospect'}`,
+      ]
+      if (lead.estimated_annual_value) summaryLines.push(`Est. Annual Value: $${Number(lead.estimated_annual_value).toLocaleString()}`)
+      if (lead.contact_name) summaryLines.push(`Contact: ${lead.contact_name}${lead.contact_title ? ` (${lead.contact_title})` : ''}`)
+      if (lead.contact_email) summaryLines.push(`Email: ${lead.contact_email}`)
+      if (lead.contact_phone) summaryLines.push(`Phone: ${lead.contact_phone}`)
+      if (lead.notes) summaryLines.push('', 'Notes:', lead.notes)
+      summaryLines.push('', `Source: Manual entry`, `Created: ${new Date().toISOString().split('T')[0]}`)
+
+      await supabase.from('interactions').insert({
+        entity: 'vitalx',
+        commercial_lead_id: lead.id,
+        interaction_date: new Date().toISOString().split('T')[0],
+        interaction_type: 'system_update',
+        subject: 'New Prospect -- Initial Summary',
+        notes: summaryLines.join('\n'),
+      })
+
+      onSave(lead)
+    }
     setSaving(false)
   }
 
@@ -466,8 +530,32 @@ function DiscoverProspectsModal({
       const { data } = await supabase
         .from('commercial_leads')
         .insert(chunk)
-        .select('id')
+        .select('id, organization_name, service_category, contact_name, contact_title, contact_phone, notes')
       imported += data?.length || 0
+
+      // Auto-create initial summary notes for each imported lead
+      if (data && data.length > 0) {
+        const interactionInserts = data.map((lead: Record<string, unknown>) => ({
+          entity: 'vitalx',
+          commercial_lead_id: lead.id as string,
+          interaction_date: new Date().toISOString().split('T')[0],
+          interaction_type: 'system_update',
+          subject: 'New Prospect -- NPI Discovery Import',
+          notes: [
+            `NEW PROSPECT IMPORTED: ${lead.organization_name}`,
+            '',
+            `Category: ${lead.service_category || 'Not set'}`,
+            lead.contact_name ? `Contact: ${lead.contact_name}${lead.contact_title ? ` (${lead.contact_title})` : ''}` : null,
+            lead.contact_phone ? `Phone: ${lead.contact_phone}` : null,
+            '',
+            `Source: NPI Registry auto-discovery`,
+            `Imported: ${new Date().toISOString().split('T')[0]}`,
+            '',
+            lead.notes ? `Details:\n${lead.notes}` : null,
+          ].filter(Boolean).join('\n'),
+        }))
+        await supabase.from('interactions').insert(interactionInserts)
+      }
     }
 
     setImportResult({ imported })

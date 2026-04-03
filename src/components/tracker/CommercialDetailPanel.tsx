@@ -52,42 +52,102 @@ export function CommercialDetailPanel({
   async function handleSave() {
     setSaving(true)
     const supabase = createClient()
+
+    // Snapshot old values for change detection
+    const oldValues: Record<string, unknown> = { ...lead }
+
+    const updatePayload = {
+      organization_name: form.organization_name,
+      contact_name: form.contact_name,
+      contact_title: form.contact_title,
+      contact_email: form.contact_email,
+      contact_phone: form.contact_phone,
+      contact_department: form.contact_department,
+      contact_direct_phone: form.contact_direct_phone,
+      contact_linkedin: form.contact_linkedin,
+      website: form.website,
+      office_name: form.office_name,
+      office_address: form.office_address,
+      office_city: form.office_city,
+      office_state: form.office_state,
+      office_zip: form.office_zip,
+      status: form.status,
+      service_category: form.service_category,
+      estimated_annual_value: form.estimated_annual_value,
+      contract_length_months: form.contract_length_months,
+      last_contact_date: form.last_contact_date,
+      next_follow_up: form.next_follow_up,
+      outreach_method: form.outreach_method,
+      contract_start_date: form.contract_start_date,
+      contract_end_date: form.contract_end_date,
+      contract_value: form.contract_value,
+      proposal_url: form.proposal_url,
+      drive_folder_url: form.drive_folder_url,
+      notes: form.notes,
+      service_summary: form.service_summary,
+    }
+
     const { data, error } = await supabase
       .from('commercial_leads')
-      .update({
-        organization_name: form.organization_name,
-        contact_name: form.contact_name,
-        contact_title: form.contact_title,
-        contact_email: form.contact_email,
-        contact_phone: form.contact_phone,
-        contact_department: form.contact_department,
-        contact_direct_phone: form.contact_direct_phone,
-        contact_linkedin: form.contact_linkedin,
-        website: form.website,
-        office_name: form.office_name,
-        office_address: form.office_address,
-        office_city: form.office_city,
-        office_state: form.office_state,
-        office_zip: form.office_zip,
-        status: form.status,
-        service_category: form.service_category,
-        estimated_annual_value: form.estimated_annual_value,
-        contract_length_months: form.contract_length_months,
-        last_contact_date: form.last_contact_date,
-        next_follow_up: form.next_follow_up,
-        outreach_method: form.outreach_method,
-        contract_start_date: form.contract_start_date,
-        contract_end_date: form.contract_end_date,
-        contract_value: form.contract_value,
-        proposal_url: form.proposal_url,
-        drive_folder_url: form.drive_folder_url,
-        notes: form.notes,
-        service_summary: form.service_summary,
-      })
+      .update(updatePayload)
       .eq('id', lead.id)
       .select()
       .single()
-    if (!error && data) { onUpdate(data as CommercialLead); setEditMode(false) }
+
+    if (!error && data) {
+      // Detect changes and auto-log interaction note
+      const FIELD_LABELS: Record<string, string> = {
+        organization_name: 'Organization', contact_name: 'Contact Name', contact_title: 'Title',
+        contact_email: 'Email', contact_phone: 'Phone', contact_department: 'Department',
+        contact_direct_phone: 'Direct Phone', contact_linkedin: 'LinkedIn', website: 'Website',
+        office_name: 'Office Name', office_address: 'Address', office_city: 'City',
+        office_state: 'State', office_zip: 'ZIP', status: 'Status',
+        service_category: 'Service Category', estimated_annual_value: 'Est. Annual Value',
+        contract_length_months: 'Contract Length', last_contact_date: 'Last Contact',
+        next_follow_up: 'Next Follow-Up', outreach_method: 'Outreach Method',
+        contract_start_date: 'Contract Start', contract_end_date: 'Contract End',
+        contract_value: 'Contract Value', proposal_url: 'Proposal URL',
+        drive_folder_url: 'Drive Folder', notes: 'Notes', service_summary: 'Service Summary',
+      }
+
+      const changes: string[] = []
+      for (const key of Object.keys(updatePayload)) {
+        const oldVal = String(oldValues[key] ?? '')
+        const newVal = String((updatePayload as Record<string, unknown>)[key] ?? '')
+        if (oldVal !== newVal) {
+          const label = FIELD_LABELS[key] || key
+          // Truncate long values in the change log
+          const oldDisplay = oldVal.length > 80 ? oldVal.slice(0, 77) + '...' : (oldVal || '(empty)')
+          const newDisplay = newVal.length > 80 ? newVal.slice(0, 77) + '...' : (newVal || '(empty)')
+          changes.push(`${label}: ${oldDisplay} -> ${newDisplay}`)
+        }
+      }
+
+      if (changes.length > 0) {
+        const noteLines = [
+          `LEAD UPDATED: ${data.organization_name || lead.organization_name}`,
+          `${changes.length} field(s) changed:`,
+          '',
+          ...changes,
+          '',
+          `Updated: ${new Date().toISOString().split('T')[0]}`,
+        ]
+
+        await supabase.from('interactions').insert({
+          entity: 'vitalx',
+          commercial_lead_id: lead.id,
+          interaction_date: new Date().toISOString().split('T')[0],
+          interaction_type: 'system_update',
+          subject: `Lead Updated -- ${changes.length} field(s) changed`,
+          notes: noteLines.join('\n'),
+        })
+      }
+
+      onUpdate(data as CommercialLead)
+      setEditMode(false)
+      // Reload interactions to show the new change note
+      loadInteractions()
+    }
     setSaving(false)
   }
 
