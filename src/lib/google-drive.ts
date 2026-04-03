@@ -284,6 +284,61 @@ export async function uploadTextFile(
 }
 
 /**
+ * Upload a file to Google Drive from a Buffer (e.g., generated .docx documents).
+ */
+export async function uploadBuffer(
+  buffer: Buffer,
+  fileName: string,
+  parentId: string,
+  mimeType: string = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+): Promise<DriveFile | null> {
+  try {
+    const token = await getAccessToken()
+    const metadata = JSON.stringify({
+      name: fileName,
+      parents: [parentId],
+    })
+
+    const boundary = '===MOG_BUFFER_BOUNDARY==='
+    const encoder = new TextEncoder()
+    const metadataPart = encoder.encode(
+      `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n`
+    )
+    const filePart = encoder.encode(`--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`)
+    const endPart = encoder.encode(`\r\n--${boundary}--`)
+
+    const body = new Uint8Array(metadataPart.length + filePart.length + buffer.length + endPart.length)
+    body.set(metadataPart, 0)
+    body.set(filePart, metadataPart.length)
+    body.set(new Uint8Array(buffer), metadataPart.length + filePart.length)
+    body.set(endPart, metadataPart.length + filePart.length + buffer.length)
+
+    const resp = await fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,webViewLink',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': `multipart/related; boundary=${boundary}`,
+        },
+        body,
+      }
+    )
+
+    if (!resp.ok) {
+      const err = await resp.text()
+      console.error(`Failed to upload buffer ${fileName}: ${resp.status} ${err}`)
+      return null
+    }
+
+    return resp.json()
+  } catch (err) {
+    console.error(`Error uploading buffer: ${err}`)
+    return null
+  }
+}
+
+/**
  * List files in a Drive folder.
  */
 export async function listFiles(folderId: string): Promise<DriveFile[]> {

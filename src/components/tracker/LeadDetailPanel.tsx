@@ -12,7 +12,7 @@ import { CategoryBadge } from './CategoryBadge'
 import { FitScoreBadge } from './FitScoreBadge'
 import { DeadlineCountdown } from './DeadlineCountdown'
 import {
-  X, ExternalLink, Edit2, Save, Check, Plus, ChevronDown, MessageSquare, Folder, RefreshCw,
+  X, ExternalLink, Edit2, Save, Check, Plus, ChevronDown, MessageSquare, Folder, RefreshCw, FileText, Loader2,
 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 
@@ -35,6 +35,7 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
   const [newNote, setNewNote] = useState('')
   const [addingNote, setAddingNote] = useState(false)
   const [activeSection, setActiveSection] = useState<'details' | 'compliance' | 'interactions'>('details')
+  const [generatingProposals, setGeneratingProposals] = useState(false)
   const [usaLoading, setUsaLoading] = useState(false)
   const [usaData, setUsaData] = useState<{
     found: boolean
@@ -645,7 +646,36 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                     <LinkButton href={lead.sam_gov_url} label="SAM.gov" />
                     <LinkButton href={lead.solicitation_url} label="Solicitation" />
                     {(lead.drive_folder_url || form.drive_folder_url) ? (
-                      <LinkButton href={form.drive_folder_url || lead.drive_folder_url} label="Drive Folder" icon={<Folder size={13} />} />
+                      <>
+                        <LinkButton href={form.drive_folder_url || lead.drive_folder_url} label="Drive Folder" icon={<Folder size={13} />} />
+                        <button
+                          onClick={async () => {
+                            try {
+                              setGeneratingProposals(true)
+                              const resp = await fetch('/api/drive/generate-proposal-docs', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ leadId: lead.id }),
+                              })
+                              const data = await resp.json()
+                              if (resp.ok) {
+                                alert(`Generated ${data.totalUploaded} proposal documents and uploaded to Drive folder.`)
+                              } else {
+                                alert(`Error: ${data.error}`)
+                              }
+                            } catch {
+                              alert('Failed to generate proposal documents.')
+                            } finally {
+                              setGeneratingProposals(false)
+                            }
+                          }}
+                          disabled={generatingProposals}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 transition-colors disabled:opacity-50"
+                        >
+                          {generatingProposals ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
+                          {generatingProposals ? 'Generating...' : 'Generate Proposals'}
+                        </button>
+                      </>
                     ) : (
                       <button
                         onClick={async () => {

@@ -8,7 +8,7 @@ import {
 } from '@/lib/constants'
 import { CommercialStatusBadge } from './CommercialStatusBadge'
 import { formatFullCurrency } from '@/lib/utils'
-import { X, Edit2, Save, ChevronDown, MessageSquare, Plus, ExternalLink, Folder, Loader2 } from 'lucide-react'
+import { X, Edit2, Save, ChevronDown, MessageSquare, Plus, ExternalLink, Folder, Loader2, FileText } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 
 interface CommercialDetailPanelProps {
@@ -29,6 +29,7 @@ export function CommercialDetailPanel({
   const [addingNote, setAddingNote] = useState(false)
   const [section, setSection] = useState<'info' | 'outreach' | 'notes'>('info')
   const [creatingFolder, setCreatingFolder] = useState(false)
+  const [generatingDocs, setGeneratingDocs] = useState(false)
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -258,7 +259,36 @@ export function CommercialDetailPanel({
                 <div className="flex gap-3 flex-wrap">
                   {lead.proposal_url && <LinkBtn href={lead.proposal_url} label="Proposal" />}
                   {(lead.drive_folder_url || form.drive_folder_url) ? (
-                    <LinkBtn href={form.drive_folder_url || lead.drive_folder_url || ''} label="Drive Folder" />
+                    <>
+                      <LinkBtn href={form.drive_folder_url || lead.drive_folder_url || ''} label="Drive Folder" />
+                      <button
+                        onClick={async () => {
+                          try {
+                            setGeneratingDocs(true)
+                            const resp = await fetch('/api/drive/generate-commercial-docs', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ leadId: lead.id }),
+                            })
+                            const data = await resp.json()
+                            if (resp.ok) {
+                              alert(`Generated ${data.totalUploaded} proposal documents and uploaded to Drive folder.`)
+                            } else {
+                              alert(`Error: ${data.error}`)
+                            }
+                          } catch {
+                            alert('Failed to generate proposal documents.')
+                          } finally {
+                            setGeneratingDocs(false)
+                          }
+                        }}
+                        disabled={generatingDocs}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-teal-900/30 text-teal-400 hover:bg-teal-900/50 border border-teal-800/50 transition disabled:opacity-50"
+                      >
+                        {generatingDocs ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
+                        {generatingDocs ? 'Generating...' : 'Generate Proposals'}
+                      </button>
+                    </>
                   ) : (
                     <button
                       onClick={createDriveFolder}

@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { createBidPackageFolder } from '@/lib/google-drive'
+import { createBidPackageFolder, findSubfolder, uploadBuffer } from '@/lib/google-drive'
 import { downloadSamDocsToFolder } from '@/lib/sam-documents'
+import { generateProposalPackage, generateCapabilityStatement } from '@/lib/proposals/generate-proposal'
 
 export async function POST(request: Request) {
   try {
@@ -76,6 +77,71 @@ export async function POST(request: Request) {
       }
     }
 
+    // Auto-generate proposal template documents and upload to subfolders
+    const proposalResult = { generated: 0, uploaded: 0 }
+    try {
+      const DOC_FOLDER_MAP: Record<string, string> = {
+        Cover_Letter: '08_Final_Submission',
+        Technical_Proposal: '04_Technical_Proposal',
+        Past_Performance: '05_Past_Performance',
+        Compliance_Certifications: '07_Compliance',
+        Quality_Control_Plan: '07_Compliance',
+        Pricing_Worksheet: '03_Pricing',
+        Capability_Statement: '08_Final_Submission',
+      }
+
+      const docs = await generateProposalPackage({
+        entity: lead.entity,
+        title: lead.title,
+        solicitationNumber: lead.solicitation_number,
+        agency: lead.agency,
+        subAgency: lead.sub_agency,
+        naicsCode: lead.naics_code,
+        setAside: lead.set_aside,
+        estimatedValue: lead.estimated_value,
+        responseDeadline: lead.response_deadline,
+        placeOfPerformance: lead.place_of_performance,
+        description: lead.description,
+        samGovUrl: lead.sam_gov_url,
+      })
+
+      // Also generate capability statement
+      const capStatement = await generateCapabilityStatement(lead.entity)
+      docs.push(capStatement)
+
+      proposalResult.generated = docs.length
+
+      // Cache subfolder lookups
+      const subfolderCache: Record<string, string> = {}
+
+      for (const doc of docs) {
+        // Determine target subfolder
+        let targetFolder = '04_Technical_Proposal'
+        for (const [pattern, folder] of Object.entries(DOC_FOLDER_MAP)) {
+          if (doc.fileName.includes(pattern)) {
+            targetFolder = folder
+            break
+          }
+        }
+
+        let targetFolderId = subfolderCache[targetFolder]
+        if (!targetFolderId) {
+          const subfolder = await findSubfolder(targetFolder, result.folderId)
+          if (subfolder) {
+            targetFolderId = subfolder.id
+            subfolderCache[targetFolder] = targetFolderId
+          } else {
+            targetFolderId = result.folderId
+          }
+        }
+
+        const uploaded = await uploadBuffer(doc.buffer, doc.fileName, targetFolderId)
+        if (uploaded) proposalResult.uploaded++
+      }
+    } catch (proposalErr) {
+      console.error('Proposal doc generation failed (non-blocking):', proposalErr)
+    }
+
     return NextResponse.json({
       folderUrl: result.folderUrl,
       folderId: result.folderId,
@@ -84,6 +150,10 @@ export async function POST(request: Request) {
       samDocs: {
         found: docResult.totalFound,
         uploaded: docResult.totalUploaded,
+      },
+      proposalDocs: {
+        generated: proposalResult.generated,
+        uploaded: proposalResult.uploaded,
       },
     })
   } catch (err) {
