@@ -259,13 +259,14 @@ export function ImportCSVModal({ entity, onClose, onImport }: ImportCSVModalProp
         notes: mapping.notes ? (row[mapping.notes] ?? '').trim() || null : null,
         description: mapping.description ? (row[mapping.description] ?? '').trim() || null : null,
         fit_score: calculateFitScore(partial, entity),
+        solicitation_verified: false,
       })
     }
 
-    // Batch insert
+    // Batch upsert (dedupe on entity + solicitation_number)
     for (let i = 0; i < toInsert.length; i += BATCH) {
       const batch = toInsert.slice(i, i + BATCH)
-      const { error } = await supabase.from('gov_leads').insert(batch)
+      const { error } = await supabase.from('gov_leads').upsert(batch, { onConflict: 'entity,solicitation_number' })
       if (error) {
         errors.push(error.message)
         skipped += batch.length

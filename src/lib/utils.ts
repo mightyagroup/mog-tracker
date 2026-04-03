@@ -91,7 +91,7 @@ export function getDaysUntilDeadline(deadline: string | null | undefined): numbe
   return differenceInDays(parseISO(deadline), new Date())
 }
 
-export function exportLeadsToCSV(leads: GovLead[], categories: ServiceCategory[]): void {
+export function exportLeadsToCSV(leads: GovLead[], categories: ServiceCategory[]): number {
   const catMap = Object.fromEntries(categories.map(c => [c.id, c.name]))
 
   const headers = [
@@ -129,4 +129,58 @@ export function exportLeadsToCSV(leads: GovLead[], categories: ServiceCategory[]
   a.download = `leads-export-${new Date().toISOString().slice(0, 10)}.csv`
   a.click()
   URL.revokeObjectURL(url)
+
+  return rows.length
+}
+
+/**
+ * Auto-categorizes a lead based on NAICS code or keywords in title/description.
+ * Returns the category ID or null if no match found.
+ */
+export function autoCategorizeLead(
+  entity: EntityType,
+  naicsCode: string | null | undefined,
+  title: string | null | undefined,
+  description: string | null | undefined,
+  categories: ServiceCategory[]
+): string | null {
+  // First, try exact NAICS match
+  if (naicsCode) {
+    const match = categories.find(c =>
+      c.entity === entity && (c.naics_codes as string[]).includes(naicsCode)
+    )
+    if (match) return match.id
+  }
+
+  // Then, try keyword match in title or description
+  const text = `${title ?? ''} ${description ?? ''}`.toLowerCase()
+  if (text.trim()) {
+    const match = categories.find(c =>
+      c.entity === entity &&
+      (c.keywords as string[]).some(kw => text.includes(kw.toLowerCase()))
+    )
+    if (match) return match.id
+  }
+
+  // Fallback to "General Support" or similar
+  const fallback = categories.find(c =>
+    c.entity === entity &&
+    (c.name.toLowerCase().includes('general') || c.name.toLowerCase().includes('support'))
+  )
+  return fallback?.id ?? null
+}
+
+/**
+ * Validates if the selected category's NAICS codes include the lead's NAICS.
+ * Returns true if valid (no NAICS or matches), false if mismatch.
+ */
+export function validateCategoryNaics(
+  categoryId: string | null | undefined,
+  naicsCode: string | null | undefined,
+  categories: ServiceCategory[]
+): boolean {
+  if (!categoryId || !naicsCode) return true // No category or no NAICS = valid
+  const category = categories.find(c => c.id === categoryId)
+  if (!category) return true // Category not found = allow (might be invalid anyway)
+  return (category.naics_codes as string[]).includes(naicsCode)
 }

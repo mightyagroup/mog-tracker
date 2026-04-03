@@ -24,8 +24,14 @@ for (const file of files) {
   const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8')
 
   // Split on statement boundaries and run each
-  const { error } = await supabase.rpc('exec_sql', { sql_text: sql }).catch(() => ({ error: 'rpc_unavailable' }))
+  let rpcResult
+  try {
+    rpcResult = await supabase.rpc('exec_sql', { sql_text: sql })
+  } catch {
+    rpcResult = { error: 'rpc_unavailable' }
+  }
 
+  const { error } = rpcResult
   if (error) {
     // Fallback: try via raw REST
     const res = await fetch(`${SUPABASE_URL}/rest/v1/`, {

@@ -99,6 +99,10 @@ export interface GovLead {
   drive_folder_url?: string | null
   notes?: string | null
   bid_decision_notes?: string | null
+  usaspending_match_method?: string | null
+  usaspending_confidence?: string | null
+  manual_pricing_override?: boolean | null
+  solicitation_verified?: boolean | null
   created_at: string
   updated_at: string
 }

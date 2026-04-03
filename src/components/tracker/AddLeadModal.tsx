@@ -6,7 +6,7 @@ import { GovLead, EntityType, ServiceCategory, LeadStatus, SourceType, SetAsideT
 import {
   LEAD_STATUSES, STATUS_LABELS, SET_ASIDE_LABELS, SOURCE_LABELS, CONTRACT_TYPE_LABELS,
 } from '@/lib/constants'
-import { calculateFitScore, isLowFit } from '@/lib/utils'
+import { calculateFitScore, isLowFit, autoCategorizeLead, validateCategoryNaics } from '@/lib/utils'
 import { Modal } from '@/components/common/Modal'
 import { FitScoreBadge } from '@/components/tracker/FitScoreBadge'
 
@@ -80,6 +80,19 @@ export function AddLeadModal({ entity, categories, onClose, onSave, defaultPropo
 
   async function handleSave() {
     if (!form.title.trim()) { setError('Title is required'); return }
+
+    // Auto-categorize if no category selected
+    let categoryId: string | null = form.service_category_id
+    if (!categoryId) {
+      categoryId = autoCategorizeLead(entity, form.naics_code, form.title, form.description, categories)
+    }
+
+    // Validate NAICS matches category
+    if (categoryId && form.naics_code && !validateCategoryNaics(categoryId, form.naics_code, categories)) {
+      setError('The selected NAICS code does not match the service category. Please choose a different category or update the NAICS code.')
+      return
+    }
+
     setSaving(true)
     setError('')
 
@@ -97,7 +110,7 @@ export function AddLeadModal({ entity, categories, onClose, onSave, defaultPropo
       naics_code: form.naics_code || null,
       set_aside: form.set_aside,
       contract_type: form.contract_type || null,
-      service_category_id: form.service_category_id || null,
+      service_category_id: categoryId,
       estimated_value: form.estimated_value ? parseFloat(form.estimated_value) : null,
       response_deadline: form.response_deadline || null,
       posted_date: form.posted_date || null,

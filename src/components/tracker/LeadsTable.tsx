@@ -18,7 +18,7 @@ import { ImportCSVModal } from './ImportCSVModal'
 import { EmptyState } from '@/components/common/EmptyState'
 import { LoadingPage } from '@/components/common/LoadingSpinner'
 import {
-  Plus, Download, Search, SlidersHorizontal, X, ArrowUpDown, ArrowUp, ArrowDown,
+  Download, Search, SlidersHorizontal, X, ArrowUpDown, ArrowUp, ArrowDown,
   ChevronDown, FileSearch, Upload,
 } from 'lucide-react'
 
@@ -59,6 +59,8 @@ export function LeadsTable({
   const [showImportModal, setShowImportModal] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkStatusOpen, setBulkStatusOpen] = useState(false)
+  const [merging, setMerging] = useState(false)
+  const [recategorizing, setRecategorizing] = useState(false)
   const bulkRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => { fetchData() }, [entity])
@@ -269,19 +271,62 @@ export function LeadsTable({
             Import
           </button>
           <button
-            onClick={() => exportLeadsToCSV(sortedLeads, categories)}
+            onClick={() => {
+              const count = exportLeadsToCSV(sortedLeads, categories)
+              alert(`Exported ${count} leads to CSV`) // basic user feedback
+            }}
             className="flex items-center gap-2 px-3 py-2 border border-[#374151] text-gray-400 hover:text-white hover:bg-[#374151] rounded-lg text-sm transition"
           >
             <Download size={14} />
             Export
           </button>
           <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 px-4 py-2 font-semibold text-sm rounded-lg text-[#111827] transition"
-            style={{ backgroundColor: accentColor }}
+            onClick={async () => {
+              setMerging(true)
+              try {
+                const resp = await fetch('/api/leads/merge-duplicates', { method: 'POST' })
+                const data = await resp.json()
+                if (resp.ok && data.success) {
+                  alert(`Merged ${data.merged} duplicate lead(s)`) 
+                  fetchData()
+                } else {
+                  alert('Merge duplicates failed')
+                }
+              } catch {
+                alert('Merge duplicates failed')
+              } finally {
+                setMerging(false)
+              }
+            }}
+            disabled={merging}
+            className="flex items-center gap-2 px-3 py-2 border border-[#374151] text-gray-400 hover:text-white hover:bg-[#374151] rounded-lg text-sm transition"
           >
-            <Plus size={15} />
-            Add Lead
+            <FileSearch size={14} />
+            {merging ? 'Merging...' : 'Merge Duplicates'}
+          </button>
+          <button
+            onClick={async () => {
+              setRecategorizing(true)
+              try {
+                const resp = await fetch('/api/leads/recategorize', { method: 'POST' })
+                const data = await resp.json()
+                if (resp.ok && data.success) {
+                  alert(`Recategorized ${data.updated} lead(s)`) 
+                  fetchData()
+                } else {
+                  alert('Recategorize failed: ' + (data.error || 'Unknown error'))
+                }
+              } catch (e) {
+                alert('Recategorize failed: ' + String(e))
+              } finally {
+                setRecategorizing(false)
+              }
+            }}
+            disabled={recategorizing}
+            className="flex items-center gap-2 px-3 py-2 border border-[#374151] text-gray-400 hover:text-white hover:bg-[#374151] rounded-lg text-sm transition"
+          >
+            <FileSearch size={14} />
+            {recategorizing ? 'Recategorizing...' : 'Recategorize All'}
           </button>
         </div>
       </div>

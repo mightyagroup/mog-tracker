@@ -6,7 +6,7 @@ import { GovLead, ServiceCategory, EntityType, ComplianceItem, Interaction, Lead
 import {
   LEAD_STATUSES, SET_ASIDE_LABELS, SOURCE_LABELS, CONTRACT_TYPE_LABELS, DEFAULT_COMPLIANCE_ITEMS,
 } from '@/lib/constants'
-import { formatFullCurrency } from '@/lib/utils'
+import { formatFullCurrency, validateCategoryNaics } from '@/lib/utils'
 import { StatusBadge } from './StatusBadge'
 import { CategoryBadge } from './CategoryBadge'
 import { FitScoreBadge } from './FitScoreBadge'
@@ -36,7 +36,15 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
   const [addingNote, setAddingNote] = useState(false)
   const [activeSection, setActiveSection] = useState<'details' | 'compliance' | 'interactions'>('details')
   const [usaLoading, setUsaLoading] = useState(false)
-  const [usaData, setUsaData] = useState<{ found: boolean; previous_award_total?: number; incumbent_contractor?: string; award_history_notes?: string } | null>(null)
+  const [usaData, setUsaData] = useState<{
+    found: boolean
+    previous_award_total?: number
+    incumbent_contractor?: string
+    award_history_notes?: string
+    usaspending_match_method?: string
+    usaspending_confidence?: string
+    message?: string
+  } | null>(null)
   const [suggestedSubs, setSuggestedSubs] = useState<(Subcontractor & { matchScore: number; matchReasons: string[] })[]>([])
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -108,30 +116,45 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
   async function lookupUSASpending(target: Partial<typeof lead> = lead) {
     setUsaLoading(true)
     try {
+      if (target.manual_pricing_override) {
+        setUsaData({
+          found: false,
+          message: 'Manual pricing override is enabled; external refresh is skipped',
+        })
+        setUsaLoading(false)
+        return
+      }
+
       const res = await fetch('/api/usaspending', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          lead_id: target.id,
           solicitation_number: target.solicitation_number,
           naics_code: target.naics_code,
           agency: target.agency,
+          place_of_performance: target.place_of_performance,
+          manual_pricing_override: target.manual_pricing_override,
         }),
       })
       if (res.ok) {
         const data = await res.json()
         setUsaData(data)
-        // Auto-populate fields if not already set and data was found
-        if (data.found) {
+
+        if (data.found && !target.manual_pricing_override) {
           setForm(f => ({
             ...f,
             previous_award_total: f.previous_award_total ?? data.previous_award_total,
             incumbent_contractor: f.incumbent_contractor ?? data.incumbent_contractor,
             award_history_notes: f.award_history_notes ?? data.award_history_notes,
+            usaspending_match_method: data.usaspending_match_method,
+            usaspending_confidence: data.usaspending_confidence,
           }))
         }
       }
-    } catch {
-      // Silently fail — lookup is best-effort
+    } catch (error) {
+      console.error('lookupUSASpending error', error)
+      setUsaData({ found: false, message: 'Could not fetch USASpending data' })
     }
     setUsaLoading(false)
   }
@@ -160,6 +183,12 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
   }
 
   async function handleSave() {
+    // Validate NAICS matches category
+    if (form.service_category_id && form.naics_code && !validateCategoryNaics(form.service_category_id, form.naics_code, categories)) {
+      alert('The selected NAICS code does not match the service category. Please choose a different category or update the NAICS code.')
+      return
+    }
+
     setSaving(true)
     const supabase = createClient()
     const { data, error } = await supabase
@@ -189,6 +218,10 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
         incumbent_contractor: form.incumbent_contractor,
         previous_award_total: form.previous_award_total,
         award_history_notes: form.award_history_notes,
+        usaspending_match_method: form.usaspending_match_method,
+        usaspending_confidence: form.usaspending_confidence,
+        manual_pricing_override: form.manual_pricing_override,
+        solicitation_verified: form.solicitation_verified,
         contracting_officer_name: form.contracting_officer_name,
         contracting_officer_email: form.contracting_officer_email,
         contracting_officer_phone: form.contracting_officer_phone,
@@ -365,6 +398,19 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                 <EditableField label="Place of Performance" value={form.place_of_performance} editMode={editMode} onChange={v => setForm(f => ({ ...f, place_of_performance: v }))} />
                 <EditableField label="Proposal Lead" value={form.proposal_lead} editMode={editMode} onChange={v => setForm(f => ({ ...f, proposal_lead: v }))} />
                 <EditableField label="Solicitation #" value={form.solicitation_number} editMode={editMode} onChange={v => setForm(f => ({ ...f, solicitation_number: v }))} />
+                {!editMode && form.solicitation_number && (
+                  <div className="text-xs text-gray-400 mt-1">
+                    <span className={`inline-block px-2 py-0.5 rounded ${form.solicitation_verified ? 'bg-green-800 text-green-300' : 'bg-yellow-800 text-yellow-300'}`}>
+                      {form.solicitation_verified ? 'Verified on SAM.gov' : 'Unverified solicitation' }
+                    </span>
+                    <a
+                      href={`https://sam.gov/opp/${lead.notice_id ?? ''}/view`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-2 text-blue-300 hover:text-blue-200"
+                    >Verify on SAM.gov</a>
+                  </div>
+                )}
                 <EditableField label="NAICS Code" value={form.naics_code} editMode={editMode} onChange={v => setForm(f => ({ ...f, naics_code: v }))} />
               </div>
 
@@ -485,9 +531,24 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                 {/* USASpending banner */}
                 {usaData && !usaLoading && (
                   <div className={`mb-3 px-3 py-2 rounded-lg text-xs border ${usaData.found ? 'bg-[#052e16] border-green-900 text-green-300' : 'bg-[#1F2937] border-[#374151] text-gray-500'}`}>
-                    {usaData.found ? '✓ Prior award data found on USASpending.gov' : 'No prior award data found on USASpending.gov — enter manually.'}
+                    {usaData.found
+                      ? `✓ Prior award data found on USASpending.gov (Matched by: ${usaData.usaspending_match_method ?? 'N/A'}, Confidence: ${usaData.usaspending_confidence ?? 'N/A'})`
+                      : 'No prior award data found on USASpending.gov — enter manually.'}
                   </div>
                 )}
+
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-xs text-gray-400">Manual override prevents overwriting pricing intel from USASpending.</div>
+                  <label className="inline-flex items-center text-xs text-gray-200 gap-2">
+                    <input
+                      type="checkbox"
+                      checked={form.manual_pricing_override ?? false}
+                      onChange={e => setForm(f => ({ ...f, manual_pricing_override: e.target.checked }))}
+                      className="h-4 w-4 text-[#D4AF37] rounded"
+                    />
+                    Override
+                  </label>
+                </div>
 
                 {/* Key pricing intel at a glance */}
                 {!editMode && (form.previous_award_total ?? lead.previous_award_total ?? form.incumbent_contractor ?? lead.incumbent_contractor) && (
