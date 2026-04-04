@@ -682,53 +682,6 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                           {generatingProposals ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
                           {generatingProposals ? 'Generating...' : 'Generate Proposals'}
                         </button>
-                        {lead.source === 'sam_gov' && lead.notice_id && (
-                          <button
-                            onClick={async () => {
-                              try {
-                                setSyncingDocs(true)
-                                const resp = await fetch('/api/drive/sync-sam-docs', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ leadId: lead.id }),
-                                })
-                                const data = await resp.json()
-                                if (resp.ok) {
-                                  if (data.documents?.found > 0) {
-                                    alert(`Synced ${data.documents.uploaded} of ${data.documents.found} document(s) from SAM.gov to your Drive folder.${data.folderCreated ? '\n\nDrive folder was auto-created.' : ''}`)
-                                  } else {
-                                    alert('No downloadable documents found on SAM.gov for this solicitation. Check the SAM.gov page directly for attachments.')
-                                  }
-                                  if (data.folderUrl && !lead.drive_folder_url) {
-                                    setForm(f => ({ ...f, drive_folder_url: data.folderUrl }))
-                                    onUpdate({ ...lead, drive_folder_url: data.folderUrl })
-                                  }
-                                  // Reload interactions to show the sync note
-                                  const supabase = createClient()
-                                  const { data: notes } = await supabase
-                                    .from('interactions')
-                                    .select('*')
-                                    .eq('gov_lead_id', lead.id)
-                                    .order('interaction_date', { ascending: false })
-                                    .order('created_at', { ascending: false })
-                                    .limit(50)
-                                  if (notes) setInteractions(notes)
-                                } else {
-                                  alert(`Error: ${data.error}`)
-                                }
-                              } catch {
-                                alert('Failed to sync SAM.gov documents.')
-                              } finally {
-                                setSyncingDocs(false)
-                              }
-                            }}
-                            disabled={syncingDocs}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 transition-colors disabled:opacity-50"
-                          >
-                            {syncingDocs ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-                            {syncingDocs ? 'Syncing...' : 'Sync SAM.gov Docs'}
-                          </button>
-                        )}
                       </>
                     ) : (
                       <button
@@ -743,6 +696,53 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                       >
                         <Folder size={13} />
                         Create Drive Folder
+                      </button>
+                    )}
+                    {lead.source === 'sam_gov' && lead.notice_id && (
+                      <button
+                        onClick={async () => {
+                          try {
+                            setSyncingDocs(true)
+                            const resp = await fetch('/api/drive/sync-sam-docs', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ leadId: lead.id }),
+                            })
+                            const data = await resp.json()
+                            if (resp.ok) {
+                              if (data.documents?.found > 0) {
+                                alert(`Synced ${data.documents.uploaded} of ${data.documents.found} document(s) from SAM.gov to your Drive folder.${data.folderCreated ? '\n\nDrive folder was auto-created.' : ''}`)
+                              } else {
+                                alert('No downloadable documents found on SAM.gov for this solicitation. Check the SAM.gov page directly for attachments.')
+                              }
+                              if (data.folderUrl && !lead.drive_folder_url) {
+                                setForm(f => ({ ...f, drive_folder_url: data.folderUrl }))
+                                onUpdate({ ...lead, drive_folder_url: data.folderUrl })
+                              }
+                              // Reload interactions to show the sync note
+                              const supabase = createClient()
+                              const { data: notes } = await supabase
+                                .from('interactions')
+                                .select('*')
+                                .eq('gov_lead_id', lead.id)
+                                .order('interaction_date', { ascending: false })
+                                .order('created_at', { ascending: false })
+                                .limit(50)
+                              if (notes) setInteractions(notes)
+                            } else {
+                              alert(`Error: ${data.error}`)
+                            }
+                          } catch {
+                            alert('Failed to sync SAM.gov documents.')
+                          } finally {
+                            setSyncingDocs(false)
+                          }
+                        }}
+                        disabled={syncingDocs}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 transition-colors disabled:opacity-50"
+                      >
+                        {syncingDocs ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+                        {syncingDocs ? 'Syncing...' : 'Sync SAM.gov Docs'}
                       </button>
                     )}
                   </div>
