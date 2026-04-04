@@ -1,5 +1,6 @@
 'use client'
 
+// Lead detail slide-over panel with SAM.gov document sync support
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { GovLead, ServiceCategory, EntityType, ComplianceItem, Interaction, LeadStatus, SetAsideType, SourceType, Subcontractor } from '@/lib/types'
