@@ -1,4 +1,4 @@
-import { EntityType, LeadStatus, SetAsideType, SourceType, ContractType, CommercialStatus } from './types'
+import { EntityType, LeadStatus, SetAsideType, SourceType, ContractType, CommercialStatus, DocumentType } from './types'
 
 export const ENTITY_BRANDING: Record<string, { primary: string; accent: string; name: string }> = {
   mog:       { primary: '#1F2937', accent: '#D4AF37', name: 'MOG Command' },
@@ -7,10 +7,28 @@ export const ENTITY_BRANDING: Record<string, { primary: string; accent: string; 
   ironhouse: { primary: '#292524', accent: '#B45309', name: 'IronHouse Janitorial & Landscaping' },
 }
 
+// NASCENCE Playbook-aligned NAICS codes per entity (LOCKED DOWN 2026-04-04)
+// Exousia: Primary 561210, Secondary 561720, 561730, 562111, 541614
+// IronHouse: Primary 561720, Secondary 561730, 561210, 562111
+// VitalX: Primary 492110, Secondary 492210, 621511, 621610, 485991, 485999, 561990
 export const ENTITY_NAICS: Record<EntityType, string[]> = {
-  exousia:   ['561720', '561730', '561210', '541614', '541611'],
+  exousia:   ['561210', '561720', '561730', '562111', '541614'],
   vitalx:    ['492110', '492210', '621511', '621610', '485991', '485999', '561990'],
   ironhouse: ['561720', '561730', '561210', '562111'],
+}
+
+// Primary NAICS per entity (for fit score weighting and SAM.gov display)
+export const ENTITY_PRIMARY_NAICS: Record<EntityType, string> = {
+  exousia:   '561210',
+  vitalx:    '492110',
+  ironhouse: '561720',
+}
+
+// PSC (Product Service Codes) per entity - for SAM.gov search and classification
+export const ENTITY_PSC: Record<EntityType, string[]> = {
+  exousia:   ['S216', 'S201', 'S208', 'S205', 'R706'],
+  vitalx:    ['V119', 'V225', 'Q301', 'Q999'],
+  ironhouse: ['S201', 'S208', 'S216', 'S205'],
 }
 
 export const LEAD_STATUSES: LeadStatus[] = [
@@ -152,3 +170,15 @@ export const DEFAULT_COMPLIANCE_ITEMS = [
   'Cover Letter',
   'Project Schedule',
 ]
+
+export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
+  solicitation: 'Solicitation',
+  proposal: 'Proposal',
+  teaming_agreement: 'Teaming Agreement',
+  capability_statement: 'Capability Statement',
+  pricing: 'Pricing',
+  contract: 'Contract',
+  correspondence: 'Correspondence',
+  certification: 'Certification',
+  other: 'Other',
+}

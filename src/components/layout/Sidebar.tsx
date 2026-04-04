@@ -4,7 +4,9 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { LayoutDashboard, Shield, Activity, Building2, LogOut, Menu, X, Users, CalendarCheck } from 'lucide-react'
+import { useAuth } from '@/lib/auth-context'
+import { LayoutDashboard, Shield, Activity, Building2, LogOut, Menu, X, Users, CalendarCheck, BarChart3, Settings } from 'lucide-react'
+import { NotificationBell } from '@/components/notifications/NotificationBell'
 
 const NAV_ITEMS = [
   { href: '/',           label: 'MOG Command',      dot: '#D4AF37', icon: LayoutDashboard },
@@ -13,12 +15,16 @@ const NAV_ITEMS = [
   { href: '/ironhouse',  label: 'IronHouse',         dot: '#B45309', icon: Building2 },
   { href: '/contacts',   label: 'Contacts',          dot: '#6B7280', icon: Users },
   { href: '/compliance', label: 'Compliance',        dot: '#6B7280', icon: CalendarCheck },
+  { href: '/analytics',  label: 'Analytics',         dot: '#6B7280', icon: BarChart3 },
 ]
+
+const ADMIN_NAV_ITEM = { href: '/admin', label: 'Admin', dot: '#EF4444', icon: Settings }
 
 export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const { isAdmin, loading } = useAuth()
 
   const isActive = (href: string) =>
     href === '/' ? pathname === '/' : pathname.startsWith(href)
@@ -28,6 +34,8 @@ export function Sidebar() {
     await supabase.auth.signOut()
     router.push('/login')
   }
+
+  const navItems = isAdmin() ? [...NAV_ITEMS, ADMIN_NAV_ITEM] : NAV_ITEMS
 
   return (
     <>
@@ -68,18 +76,21 @@ export function Sidebar() {
               <div className="text-[#D4AF37] text-[10px] tracking-wider uppercase">Command Center</div>
             </div>
           </div>
-          <button
-            onClick={() => setMobileOpen(false)}
-            className="lg:hidden text-gray-400 hover:text-white flex-shrink-0"
-            aria-label="Close menu"
-          >
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            <button
+              onClick={() => setMobileOpen(false)}
+              className="lg:hidden text-gray-400 hover:text-white flex-shrink-0"
+              aria-label="Close menu"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {/* Nav links */}
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-          {NAV_ITEMS.map(({ href, label, dot, icon: Icon }) => (
+          {navItems.map(({ href, label, dot, icon: Icon }) => (
             <Link
               key={href}
               href={href}

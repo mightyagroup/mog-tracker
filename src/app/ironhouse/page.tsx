@@ -7,6 +7,7 @@ import { LeadsTable } from '@/components/tracker/LeadsTable'
 import { SubcontractorsTable } from '@/components/tracker/SubcontractorsTable'
 import { GovPricingCalculator } from '@/components/pricing/GovPricingCalculator'
 import { EntityContactsTab } from '@/components/contacts/EntityContactsTab'
+import { EntityNaicsBar } from '@/components/layout/EntityNaicsBar'
 import { Building2 } from 'lucide-react'
 
 const ACCENT = '#B45309'
@@ -47,6 +48,9 @@ export default function IronHousePage() {
             </div>
           </div>
         </header>
+
+        {/* NAICS / PSC codes bar */}
+        <EntityNaicsBar entity="ironhouse" accentColor={ACCENT} />
 
         {/* Tabs */}
         <TabNav tabs={TABS} activeTab={activeTab} onChange={setActiveTab} accentColor={ACCENT} />

@@ -1,6 +1,6 @@
 import { differenceInDays, parseISO } from 'date-fns'
 import { GovLead, CommercialLead, EntityType, ServiceCategory, SourceType } from './types'
-import { ENTITY_NAICS } from './constants'
+import { ENTITY_NAICS, ENTITY_PRIMARY_NAICS } from './constants'
 
 export function calculateFitScore(lead: Partial<GovLead>, entity: EntityType): number {
   let score = 0
@@ -11,9 +11,11 @@ export function calculateFitScore(lead: Partial<GovLead>, entity: EntityType): n
   else if (lead.set_aside === 'sole_source' || lead.set_aside === 'hubzone' || lead.set_aside === '8a' || lead.set_aside === 'sdvosb') score += 15
   else if (lead.set_aside === 'full_and_open') score += 5
 
-  // NAICS match (0–25 points)
+  // NAICS match (0–25 points) — primary NAICS gets full points, secondary gets partial
   const entityNaics = ENTITY_NAICS[entity]
-  if (lead.naics_code && entityNaics.includes(lead.naics_code)) score += 25
+  const primaryNaics = ENTITY_PRIMARY_NAICS[entity]
+  if (lead.naics_code === primaryNaics) score += 25
+  else if (lead.naics_code && entityNaics.includes(lead.naics_code)) score += 15
 
   // Location (0–20 points)
   const loc = (lead.place_of_performance ?? '').toLowerCase()

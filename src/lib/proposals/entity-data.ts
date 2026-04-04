@@ -68,13 +68,11 @@ export const EXOUSIA_DATA: EntityProposalData = {
   website: null,
   address: '[Business Address]',
   naicsCodes: [
+    { code: '561210', description: 'Facilities Support Services', primary: true },
     { code: '561720', description: 'Janitorial Services' },
-    { code: '561730', description: 'Landscaping Services', primary: true },
-    { code: '561210', description: 'Facilities Support Services' },
+    { code: '561730', description: 'Landscaping Services' },
+    { code: '562111', description: 'Solid Waste Collection' },
     { code: '541614', description: 'Process, Physical Distribution, and Logistics Consulting Services' },
-    { code: '541611', description: 'Administrative Management and General Management Consulting Services' },
-    { code: '561110', description: 'Office Administrative Services' },
-    { code: '237310', description: 'Highway, Street, and Bridge Construction' },
   ],
   certifications: [
     'Woman-Owned Small Business (WOSB)',
@@ -163,7 +161,7 @@ export const VITALX_DATA: EntityProposalData = {
   cageCode: null,
   samEmail: null,
   publicEmail: 'info@thevitalx.com',
-  phone: '(571) 622-9133',
+  phone: null,
   website: 'www.thevitalx.com',
   address: '[Business Address]',
   naicsCodes: [
@@ -268,8 +266,8 @@ export const IRONHOUSE_DATA: EntityProposalData = {
   ],
   managingMember: 'Nana Badu',
   managingTitle: 'Owner',
-  proposalLead: 'Nana Badu',
-  proposalLeadTitle: 'Owner',
+  proposalLead: 'Emmanuela Wireko-Brobbey / Nana Badu',
+  proposalLeadTitle: 'Managing Member / Owner',
   companyOverview: `IronHouse Janitorial & Landscaping Services LLC is a facilities management company specializing in janitorial services, grounds maintenance, and building support operations for government and commercial clients. With over 21 years of direct facilities and grounds maintenance experience, IronHouse delivers reliable, high-quality service across institutional, commercial, and government environments.
 
 IronHouse provides comprehensive facilities services including custodial cleaning, floor care, grounds mowing and trimming, landscaping, snow removal, pest control coordination, and general building maintenance. Our team brings extensive hands-on experience from long-term service with Fairfax County Public Schools and other institutional clients in the Virginia and Maryland region.`,

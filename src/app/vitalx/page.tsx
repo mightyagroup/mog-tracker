@@ -9,6 +9,7 @@ import { CommercialLeadsTable } from '@/components/tracker/CommercialLeadsTable'
 import { GovPricingCalculator } from '@/components/pricing/GovPricingCalculator'
 import { CommercialPricingCalculator } from '@/components/pricing/CommercialPricingCalculator'
 import { EntityContactsTab } from '@/components/contacts/EntityContactsTab'
+import { EntityNaicsBar } from '@/components/layout/EntityNaicsBar'
 import { Activity } from 'lucide-react'
 
 const ACCENT = '#06A59A'
@@ -54,10 +55,13 @@ export default function VitalXPage() {
           <div className="ml-auto">
             <div className="text-xs text-right">
               <div style={{ color: ACCENT }} className="font-semibold">Healthcare Logistics</div>
-              <div className="text-gray-500">(571) 622-9133</div>
+              <div className="text-gray-500">info@thevitalx.com</div>
             </div>
           </div>
         </header>
+
+        {/* NAICS / PSC codes bar */}
+        <EntityNaicsBar entity="vitalx" accentColor={ACCENT} />
 
         {/* Section switcher */}
         <div className="flex items-center gap-1 px-6 pt-3 border-b border-[#374151] bg-[#111827]">

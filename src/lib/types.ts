@@ -56,6 +56,7 @@ export interface ServiceCategory {
   entity: EntityType
   name: string
   naics_codes: string[]
+  psc_codes: string[]
   keywords: string[]
   color: string
   sort_order: number
@@ -218,6 +219,86 @@ export interface Interaction {
   notes?: string | null
   follow_up_date?: string | null
   follow_up_action?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type UserRole = 'admin' | 'manager' | 'viewer'
+
+export interface UserProfile {
+  id: string
+  user_id: string
+  role: UserRole
+  display_name?: string | null
+  email?: string | null
+  entities_access: EntityType[]
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type NotificationType =
+  | 'deadline_reminder'
+  | 'new_lead'
+  | 'status_change'
+  | 'amendment_detected'
+  | 'daily_digest'
+  | 'system'
+
+export interface Notification {
+  id: string
+  user_id: string
+  entity?: EntityType | null
+  notification_type: NotificationType
+  title: string
+  message: string
+  link?: string | null
+  is_read: boolean
+  gov_lead_id?: string | null
+  commercial_lead_id?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface NotificationPreference {
+  id: string
+  user_id: string
+  deadline_reminders: boolean
+  deadline_days_before: number[]
+  new_leads: boolean
+  status_changes: boolean
+  amendment_alerts: boolean
+  daily_digest: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type DocumentType =
+  | 'solicitation'
+  | 'proposal'
+  | 'teaming_agreement'
+  | 'capability_statement'
+  | 'pricing'
+  | 'contract'
+  | 'correspondence'
+  | 'certification'
+  | 'other'
+
+export interface Document {
+  id: string
+  entity: EntityType
+  gov_lead_id?: string | null
+  commercial_lead_id?: string | null
+  subcontractor_id?: string | null
+  file_name: string
+  file_type?: string | null
+  file_size?: number | null
+  storage_path: string
+  document_type?: DocumentType | null
+  description?: string | null
+  uploaded_by?: string | null
+  version: number
+  is_archived: boolean
   created_at: string
   updated_at: string
 }

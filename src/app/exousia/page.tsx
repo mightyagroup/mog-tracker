@@ -7,6 +7,7 @@ import { LeadsTable } from '@/components/tracker/LeadsTable'
 import { SubcontractorsTable } from '@/components/tracker/SubcontractorsTable'
 import { GovPricingCalculator } from '@/components/pricing/GovPricingCalculator'
 import { EntityContactsTab } from '@/components/contacts/EntityContactsTab'
+import { EntityNaicsBar } from '@/components/layout/EntityNaicsBar'
 import { Shield } from 'lucide-react'
 
 const ACCENT = '#D4AF37'
@@ -47,6 +48,9 @@ export default function ExousiaPage() {
             </div>
           </div>
         </header>
+
+        {/* NAICS / PSC codes bar */}
+        <EntityNaicsBar entity="exousia" accentColor={ACCENT} />
 
         {/* Tabs */}
         <TabNav tabs={TABS} activeTab={activeTab} onChange={setActiveTab} accentColor={ACCENT} />

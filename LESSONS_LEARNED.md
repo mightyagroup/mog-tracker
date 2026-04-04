@@ -109,3 +109,61 @@
 **Setup:** SAM.gov v2 returns `pointOfContact` array. Primary POC (type === 'primary') is extracted as contracting officer.
 **Result:** Contracting officer name, email, phone populate on the lead AND upsert to master contacts table with `contact_type: 'contracting_officer'` and `organization` set from `agency ?? sub_agency`.
 **Note:** After changing the organization upsert logic, run `/api/cron/sam-feed` once to backfill the 9 existing contacts that had null organization.
+
+---
+
+## 2026-04-04 — Phase 8: State Procurement Feeds (eVA & eMMA)
+
+**Problem**: Virginia (eVA) and Maryland (eMMA) procurement systems don't expose reliable public APIs, unlike SAM.gov. Needed a way to import state procurement opportunities without full API automation.
+
+**Fix**:
+1. Built dual-mode feed endpoints (GET for diagnostics, POST for manual/programmatic import)
+2. Created stateful database columns (state_procurement_id, last_eva_check, last_emma_check) for deduplication
+3. Implemented CSV parsing and bulk import component in the UI with dry-run mode
+4. Reused existing utilities (calculateFitScore, autoCategorizeLead) for consistency
+5. Added state_feed_logs audit table for tracking all feed operations
+6. Updated vercel.json with weekly read-only cron checks (informational only)
+
+**Prevention**:
+- For state/regional systems without public APIs, design flexible POST endpoints that accept JSON
+- Always provide dry-run mode for imports to reduce user error
+- Include detailed error reporting (which records failed, why, and how many succeeded)
+- Use deduplication IDs with source prefix (eva_*, emma_*) to prevent collisions across systems
+- Log all feed operations to audit table for debugging and reporting
+- Leverage existing utility functions rather than duplicating fit score/categorization logic
+
+**TypeScript Lesson**: When selecting partial data from Supabase, import and type-cast to known interfaces (ServiceCategory[]) rather than `any` to maintain type safety during function calls.
+
+---
+
+## 2026-04-04 — Phase 11: Document Management with Supabase Storage
+
+**Design**: Built a complete document management system with:
+1. Private Supabase Storage bucket (50MB limit, MIME type whitelist)
+2. Database table linking documents to leads/subcontractors/entities
+3. Four React components: DocumentUpload (drag-drop), DocumentList (table), LeadDocuments (embedded), DocumentPreview (modal)
+4. Three API endpoints: POST (upload), GET (list/download with signed URLs), PATCH (metadata), DELETE
+5. Signed URLs with 60-minute expiry for secure downloads
+
+**Key Decisions**:
+- Storage path format: `{entity}/{lead_id or 'general'}/{timestamp}_{sanitized_filename}.{ext}` ensures unique paths and easy cleanup by entity/lead
+- Document types enum (solicitation, proposal, teaming_agreement, capability_statement, pricing, contract, correspondence, certification, other) matches bid lifecycle
+- Drag-and-drop UX with multi-file selection, real-time validation (MIME type, file size), and progress feedback
+- Authenticated RLS on documents table — all authenticated users can CRUD (fine-grained access control deferred to future phases)
+- File deletion removes from both Supabase Storage AND database in a single DELETE operation
+- Signed URLs generated on-demand at download time (no pre-generation, no expiry surprises)
+
+**TypeScript**: Full strict typing throughout — no `any` types. Document interface includes all fields from database schema. DocumentType is a discriminated union matching database enum.
+
+**UI Pattern**: LeadDocuments component wraps DocumentUpload + DocumentList for use in lead detail panels. Components are composable and work standalone or embedded.
+
+**Error Handling**: All components surface errors via alert-style UI feedback. Network errors, validation failures, and auth issues are caught and displayed to user. Upload errors include specific file-level details (which file, what failed).
+
+**Prevention**:
+- Always validate files client-side before upload (MIME type, size) AND server-side (API layer)
+- Use signed URLs with reasonable expiry (60 min) to prevent long-lived download links
+- Store file metadata (size, type, upload time) in database to support filtering and audit
+- Implement soft delete (is_archived boolean) alongside hard delete to maintain audit trail
+- Test file previews with multiple formats (PDF, image, unsupported types) — handle graceful fallbacks
+- Structure storage paths to support bulk operations (e.g., delete all files for a lead)
+
