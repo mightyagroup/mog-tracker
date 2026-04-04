@@ -6,7 +6,7 @@ import { generateInitialSummary, LeadSnapshot } from '@/lib/lead-tracking'
 // Finds all gov_leads that have NO interaction notes and generates initial summary notes for them.
 // Also generates notes for commercial leads missing them.
 
-export async function POST(request: Request) {
+export async function POST(_request: Request) {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!

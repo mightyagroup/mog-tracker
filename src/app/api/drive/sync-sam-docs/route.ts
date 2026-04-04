@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { createBidPackageFolder, findSubfolder } from '@/lib/google-drive'
-import { downloadSamDocsToFolder, uploadAmendmentReport } from '@/lib/sam-documents'
+import { createBidPackageFolder } from '@/lib/google-drive'
+import { downloadSamDocsToFolder } from '@/lib/sam-documents'
 
 /**
  * POST /api/drive/sync-sam-docs
