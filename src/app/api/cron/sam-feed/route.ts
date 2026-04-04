@@ -11,7 +11,8 @@ import {
   hashDescription,
   type LeadSnapshot,
 } from '@/lib/lead-tracking'
-import { downloadSamDocsToFolder } from '@/lib/sam-documents'
+import { downloadSamDocsToFolder, uploadAmendmentReport } from '@/lib/sam-documents'
+import { createBidPackageFolder } from '@/lib/google-drive'
 
 const ALL_NAICS = Array.from(new Set(Object.values(ENTITY_NAICS).flat()))
 
@@ -382,41 +383,93 @@ export async function GET(request: Request) {
             // Auto-create change note if anything significant changed
             if (changes.length > 0) {
               let changeNote = generateChangeNote(newLead, changes)
+              const amendment = isLikelyAmendment(changes)
+              const newAmendmentCount = amendment ? (existing.amendment_count ?? 0) + 1 : (existing.amendment_count ?? 0)
 
               // ── Drive document sync on amendment / changes ──────────────────
-              const driveFolderUrl = (existing as Record<string, unknown>).drive_folder_url as string | null
-              if (driveFolderUrl && isLikelyAmendment(changes)) {
-                const folderMatch = driveFolderUrl.match(/folders\/([a-zA-Z0-9_-]+)/)
-                if (folderMatch) {
-                  try {
-                    const docResult = await downloadSamDocsToFolder({
-                      noticeId: noticeId || null,
-                      solicitationNumber: solNum,
-                      bidFolderId: folderMatch[1],
-                      samGovUrl: samUrl,
-                    })
-                    docsSynced += docResult.totalUploaded
+              let driveFolderUrl = (existing as Record<string, unknown>).drive_folder_url as string | null
+              let bidFolderId: string | null = null
 
-                    // Append document sync details to the change note
-                    if (docResult.totalFound > 0) {
-                      const docLines: string[] = [
-                        '',
-                        '---',
-                        'DRIVE DOCUMENT SYNC',
-                        `Found ${docResult.totalFound} document(s) on SAM.gov, uploaded ${docResult.totalUploaded} to bid folder.`,
-                      ]
-                      for (const doc of docResult.documents) {
-                        docLines.push(`- ${doc.success ? '[synced]' : '[failed]'} ${doc.fileName}${doc.error ? ` (${doc.error})` : ''}`)
-                      }
-                      docLines.push(`Destination: 01_Solicitation_Docs`)
-                      changeNote = (changeNote || '') + '\n' + docLines.join('\n')
-                    } else {
-                      changeNote = (changeNote || '') + '\n\n---\nDRIVE DOCUMENT SYNC\nNo downloadable documents found on SAM.gov. Check the solicitation page manually.'
+              // Auto-create bid folder if amendment detected but no folder exists
+              if (amendment && !driveFolderUrl) {
+                try {
+                  const folderResult = await createBidPackageFolder({
+                    entity,
+                    title,
+                    agency,
+                    solicitationNumber: solNum,
+                    naicsCode: naicsCode ?? null,
+                    setAside: setAside,
+                    estimatedValue: null,
+                    responseDeadline: deadline ?? null,
+                  })
+                  bidFolderId = folderResult.folderId
+                  driveFolderUrl = folderResult.folderUrl
+
+                  // Update the lead with the new Drive folder URL
+                  await supabase
+                    .from('gov_leads')
+                    .update({ drive_folder_url: driveFolderUrl })
+                    .eq('id', existing.id)
+
+                  changeNote = (changeNote || '') + `\n\n---\nBID FOLDER AUTO-CREATED\nDrive folder created for this lead due to amendment detection.\nFolder: ${driveFolderUrl}`
+                } catch (folderErr) {
+                  errorLog.push(`auto-folder(${entity}/${noticeId}): ${String(folderErr)}`)
+                  changeNote = (changeNote || '') + `\n\n---\nBID FOLDER CREATE FAILED: ${String(folderErr)}`
+                }
+              } else if (driveFolderUrl) {
+                const folderMatch = driveFolderUrl.match(/folders\/([a-zA-Z0-9_-]+)/)
+                if (folderMatch) bidFolderId = folderMatch[1]
+              }
+
+              // Download docs and upload amendment report if we have a folder
+              if (bidFolderId && amendment) {
+                try {
+                  const docResult = await downloadSamDocsToFolder({
+                    noticeId: noticeId || null,
+                    solicitationNumber: solNum,
+                    bidFolderId,
+                    samGovUrl: samUrl,
+                  })
+                  docsSynced += docResult.totalUploaded
+
+                  // Upload amendment comparison report to Drive
+                  const reportResult = await uploadAmendmentReport({
+                    bidFolderId,
+                    amendmentNumber: newAmendmentCount,
+                    title,
+                    solicitationNumber: solNum,
+                    agency,
+                    entity,
+                    changes,
+                    docSyncResults: docResult,
+                  })
+
+                  // Append document sync details to the change note
+                  const docLines: string[] = [
+                    '',
+                    '---',
+                    'DRIVE DOCUMENT SYNC',
+                  ]
+                  if (docResult.totalFound > 0) {
+                    docLines.push(`Found ${docResult.totalFound} document(s) on SAM.gov, uploaded ${docResult.totalUploaded} to bid folder.`)
+                    for (const doc of docResult.documents) {
+                      docLines.push(`- ${doc.success ? '[synced]' : '[failed]'} ${doc.fileName}${doc.error ? ` (${doc.error})` : ''}`)
                     }
-                  } catch (driveErr) {
-                    changeNote = (changeNote || '') + `\n\n---\nDRIVE SYNC ERROR: ${String(driveErr)}`
-                    errorLog.push(`drive-sync(${entity}/${noticeId}): ${String(driveErr)}`)
+                    docLines.push(`Destination: 01_Solicitation_Docs`)
+                  } else {
+                    docLines.push('No downloadable documents found on SAM.gov. Check the solicitation page manually.')
                   }
+
+                  if (reportResult.success) {
+                    docLines.push('')
+                    docLines.push(`Amendment comparison report saved: AMENDMENT_${newAmendmentCount}_${new Date().toISOString().slice(0, 10)}.md`)
+                  }
+
+                  changeNote = (changeNote || '') + '\n' + docLines.join('\n')
+                } catch (driveErr) {
+                  changeNote = (changeNote || '') + `\n\n---\nDRIVE SYNC ERROR: ${String(driveErr)}`
+                  errorLog.push(`drive-sync(${entity}/${noticeId}): ${String(driveErr)}`)
                 }
               }
 
@@ -427,7 +480,7 @@ export async function GET(request: Request) {
                     gov_lead_id: existing.id,
                     interaction_date: new Date().toISOString().slice(0, 10),
                     interaction_type: 'system_update',
-                    subject: isLikelyAmendment(changes)
+                    subject: amendment
                       ? `Amendment Detected -- ${changes.filter(c => c.significance === 'high').map(c => c.label).join(', ')}`
                       : `Lead Updated -- ${changes.map(c => c.label).join(', ')}`,
                     notes: changeNote,

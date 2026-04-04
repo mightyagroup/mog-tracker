@@ -8,6 +8,7 @@
  */
 
 import { uploadFileFromUrl, findSubfolder, uploadTextFile } from './google-drive'
+import type { FieldChange } from './lead-tracking'
 
 // --- Types ---
 
@@ -32,11 +33,16 @@ interface SamAttachment {
   addedDate?: string
 }
 
-interface DocumentUploadResult {
+export interface DocumentUploadResult {
   fileName: string
   driveFileId: string | null
   success: boolean
   error?: string
+}
+
+// --- Date stamp for versioned filenames ---
+function dateStamp(): string {
+  return new Date().toISOString().slice(0, 10) // e.g. 2026-04-03
 }
 
 // --- SAM.gov API helpers ---
@@ -279,24 +285,28 @@ export async function downloadSamDocsToFolder(params: {
 
   const results: DocumentUploadResult[] = []
 
-  // Upload each document to Drive
+  // Upload each document to Drive with date prefix to preserve versions
+  const stamp = dateStamp()
   for (const attachment of attachments) {
+    // Prefix filename with date so amendments don't overwrite originals
+    // e.g. "2026-04-03_Solicitation.pdf" vs "2026-03-01_Solicitation.pdf"
+    const versionedName = `${stamp}_${attachment.name}`
     try {
       const driveFile = await uploadFileFromUrl(
         attachment.url,
-        attachment.name,
+        versionedName,
         solDocsFolder.id,
         attachment.type,
       )
 
       results.push({
-        fileName: attachment.name,
+        fileName: versionedName,
         driveFileId: driveFile?.id || null,
         success: !!driveFile,
       })
     } catch (err) {
       results.push({
-        fileName: attachment.name,
+        fileName: versionedName,
         driveFileId: null,
         success: false,
         error: String(err),
@@ -336,5 +346,122 @@ export async function downloadSamDocsToFolder(params: {
     documents: results,
     totalFound: attachments.length,
     totalUploaded: results.filter(r => r.success).length,
+  }
+}
+
+// ── Amendment Comparison Report ──────────────────────────────────────────────
+// Generates a markdown report showing exactly what changed and uploads it to
+// the bid folder's 01_Solicitation_Docs so it's right next to the amended files.
+
+export async function uploadAmendmentReport(params: {
+  bidFolderId: string
+  amendmentNumber: number
+  title: string
+  solicitationNumber: string | null
+  agency: string | null
+  entity: string
+  changes: FieldChange[]
+  docSyncResults?: { totalFound: number; totalUploaded: number; documents: DocumentUploadResult[] }
+}): Promise<{ success: boolean; fileId?: string; error?: string }> {
+  try {
+    const solDocsFolder = await findSubfolder('01_Solicitation_Docs', params.bidFolderId)
+    if (!solDocsFolder) {
+      return { success: false, error: 'Could not find 01_Solicitation_Docs subfolder' }
+    }
+
+    const stamp = dateStamp()
+    const lines: string[] = []
+
+    lines.push(`# Amendment ${params.amendmentNumber} -- Comparison Report`)
+    lines.push('')
+    lines.push(`**Date Detected:** ${stamp}`)
+    lines.push(`**Title:** ${params.title}`)
+    lines.push(`**Solicitation:** ${params.solicitationNumber || 'N/A'}`)
+    lines.push(`**Agency:** ${params.agency || 'N/A'}`)
+    lines.push(`**Entity:** ${params.entity}`)
+    lines.push('')
+    lines.push('---')
+    lines.push('')
+
+    // High-significance changes first
+    const highChanges = params.changes.filter(c => c.significance === 'high')
+    const medChanges = params.changes.filter(c => c.significance === 'medium')
+    const lowChanges = params.changes.filter(c => c.significance === 'low')
+
+    if (highChanges.length > 0) {
+      lines.push('## HIGH-PRIORITY CHANGES (review immediately)')
+      lines.push('')
+      for (const c of highChanges) {
+        lines.push(`### ${c.label}`)
+        lines.push(`- **Previous:** ${c.oldValue}`)
+        lines.push(`- **Updated:** ${c.newValue}`)
+        lines.push('')
+      }
+    }
+
+    if (medChanges.length > 0) {
+      lines.push('## MEDIUM-PRIORITY CHANGES')
+      lines.push('')
+      for (const c of medChanges) {
+        lines.push(`### ${c.label}`)
+        lines.push(`- **Previous:** ${c.oldValue}`)
+        lines.push(`- **Updated:** ${c.newValue}`)
+        lines.push('')
+      }
+    }
+
+    if (lowChanges.length > 0) {
+      lines.push('## LOW-PRIORITY CHANGES')
+      lines.push('')
+      for (const c of lowChanges) {
+        lines.push(`- **${c.label}:** ${c.oldValue} --> ${c.newValue}`)
+      }
+      lines.push('')
+    }
+
+    // Document sync section
+    if (params.docSyncResults) {
+      lines.push('---')
+      lines.push('')
+      lines.push('## DOCUMENT SYNC')
+      lines.push('')
+      lines.push(`Found ${params.docSyncResults.totalFound} document(s) on SAM.gov, uploaded ${params.docSyncResults.totalUploaded} to bid folder.`)
+      lines.push('')
+      if (params.docSyncResults.documents.length > 0) {
+        for (const doc of params.docSyncResults.documents) {
+          lines.push(`- ${doc.success ? '[synced]' : '[FAILED]'} ${doc.fileName}${doc.error ? ` -- Error: ${doc.error}` : ''}`)
+        }
+      } else {
+        lines.push('No downloadable documents found via SAM.gov API. Check the solicitation page manually for attachments.')
+      }
+      lines.push('')
+    }
+
+    lines.push('---')
+    lines.push('')
+    lines.push('## ACTION ITEMS')
+    lines.push('')
+    lines.push('- [ ] Review all high-priority changes above')
+    if (highChanges.some(c => c.field === 'response_deadline')) {
+      lines.push('- [ ] UPDATE INTERNAL DEADLINE -- the response deadline has changed')
+    }
+    if (highChanges.some(c => c.field === 'estimated_value')) {
+      lines.push('- [ ] Re-evaluate pricing based on updated estimated value')
+    }
+    lines.push('- [ ] Compare new solicitation documents against previous versions')
+    lines.push('- [ ] Update proposal draft to reflect changes')
+    lines.push('- [ ] Notify proposal team of amendment')
+    lines.push('')
+    lines.push(`Auto-generated by MOG Tracker on ${stamp}`)
+
+    const fileName = `AMENDMENT_${params.amendmentNumber}_${stamp}.md`
+    const file = await uploadTextFile(lines.join('\n'), fileName, solDocsFolder.id, 'text/markdown')
+
+    if (file) {
+      return { success: true, fileId: file.id }
+    }
+    return { success: false, error: 'Upload returned null' }
+  } catch (err) {
+    return { success: false, error: String(err) }
   }
 }

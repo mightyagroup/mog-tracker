@@ -12,7 +12,7 @@ import { CategoryBadge } from './CategoryBadge'
 import { FitScoreBadge } from './FitScoreBadge'
 import { DeadlineCountdown } from './DeadlineCountdown'
 import {
-  X, ExternalLink, Edit2, Save, Check, Plus, ChevronDown, MessageSquare, Folder, RefreshCw, FileText, Loader2,
+  X, ExternalLink, Edit2, Save, Check, Plus, ChevronDown, MessageSquare, Folder, RefreshCw, FileText, Loader2, AlertTriangle, Download,
 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 
@@ -36,6 +36,7 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
   const [addingNote, setAddingNote] = useState(false)
   const [activeSection, setActiveSection] = useState<'details' | 'compliance' | 'interactions'>('details')
   const [generatingProposals, setGeneratingProposals] = useState(false)
+  const [syncingDocs, setSyncingDocs] = useState(false)
   const [usaLoading, setUsaLoading] = useState(false)
   const [usaData, setUsaData] = useState<{
     found: boolean
@@ -374,6 +375,12 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
               <StatusDropdown status={(form.status ?? lead.status) as LeadStatus} onChange={handleStatusChange} />
               {cat && <CategoryBadge name={cat.name} color={cat.color} />}
               <FitScoreBadge score={lead.fit_score} />
+              {(lead.amendment_count ?? 0) > 0 && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-red-500/15 text-red-400 border border-red-500/30">
+                  <AlertTriangle size={10} />
+                  {lead.amendment_count} Amendment{(lead.amendment_count ?? 0) > 1 ? 's' : ''}
+                </span>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -675,6 +682,53 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                           {generatingProposals ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
                           {generatingProposals ? 'Generating...' : 'Generate Proposals'}
                         </button>
+                        {lead.source === 'sam_gov' && lead.notice_id && (
+                          <button
+                            onClick={async () => {
+                              try {
+                                setSyncingDocs(true)
+                                const resp = await fetch('/api/drive/sync-sam-docs', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ leadId: lead.id }),
+                                })
+                                const data = await resp.json()
+                                if (resp.ok) {
+                                  if (data.documents?.found > 0) {
+                                    alert(`Synced ${data.documents.uploaded} of ${data.documents.found} document(s) from SAM.gov to your Drive folder.${data.folderCreated ? '\n\nDrive folder was auto-created.' : ''}`)
+                                  } else {
+                                    alert('No downloadable documents found on SAM.gov for this solicitation. Check the SAM.gov page directly for attachments.')
+                                  }
+                                  if (data.folderUrl && !lead.drive_folder_url) {
+                                    setForm(f => ({ ...f, drive_folder_url: data.folderUrl }))
+                                    onUpdate({ ...lead, drive_folder_url: data.folderUrl })
+                                  }
+                                  // Reload interactions to show the sync note
+                                  const supabase = createClient()
+                                  const { data: notes } = await supabase
+                                    .from('interactions')
+                                    .select('*')
+                                    .eq('gov_lead_id', lead.id)
+                                    .order('interaction_date', { ascending: false })
+                                    .order('created_at', { ascending: false })
+                                    .limit(50)
+                                  if (notes) setInteractions(notes)
+                                } else {
+                                  alert(`Error: ${data.error}`)
+                                }
+                              } catch {
+                                alert('Failed to sync SAM.gov documents.')
+                              } finally {
+                                setSyncingDocs(false)
+                              }
+                            }}
+                            disabled={syncingDocs}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 transition-colors disabled:opacity-50"
+                          >
+                            {syncingDocs ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+                            {syncingDocs ? 'Syncing...' : 'Sync SAM.gov Docs'}
+                          </button>
+                        )}
                       </>
                     ) : (
                       <button
@@ -833,21 +887,54 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                 <div className="text-center py-8 text-gray-500 text-sm">No notes yet.</div>
               ) : (
                 <div className="space-y-3">
-                  {interactions.map(i => (
-                    <div key={i.id} className="bg-[#1F2937] rounded-lg border border-[#374151] px-4 py-3">
-                      <div className="flex items-center gap-2 mb-1">
-                        <MessageSquare size={13} className="text-gray-500" />
-                        <span className="text-gray-500 text-xs">{i.interaction_date}</span>
-                        {i.interaction_type && i.interaction_type !== 'note' && (
-                          <span className="text-xs text-gray-500 capitalize">· {i.interaction_type}</span>
+                  {interactions.map(i => {
+                    const isAmendment = i.subject?.toLowerCase().includes('amendment detected')
+                    const isDocSync = i.subject?.toLowerCase().includes('document sync')
+                    const isSystemUpdate = i.interaction_type === 'system_update'
+
+                    return (
+                      <div
+                        key={i.id}
+                        className={`rounded-lg px-4 py-3 ${
+                          isAmendment
+                            ? 'bg-red-950/40 border border-red-800/50'
+                            : isDocSync
+                            ? 'bg-amber-950/30 border border-amber-800/40'
+                            : 'bg-[#1F2937] border border-[#374151]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          {isAmendment ? (
+                            <AlertTriangle size={13} className="text-red-400" />
+                          ) : isDocSync ? (
+                            <Download size={13} className="text-amber-400" />
+                          ) : isSystemUpdate ? (
+                            <RefreshCw size={13} className="text-blue-400" />
+                          ) : (
+                            <MessageSquare size={13} className="text-gray-500" />
+                          )}
+                          <span className={`text-xs ${isAmendment ? 'text-red-400' : isDocSync ? 'text-amber-400' : 'text-gray-500'}`}>
+                            {i.interaction_date}
+                          </span>
+                          {isAmendment && (
+                            <span className="text-[10px] uppercase tracking-wider font-bold text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded">Amendment</span>
+                          )}
+                          {isDocSync && (
+                            <span className="text-[10px] uppercase tracking-wider font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">Doc Sync</span>
+                          )}
+                          {!isAmendment && !isDocSync && i.interaction_type && i.interaction_type !== 'note' && (
+                            <span className="text-xs text-gray-500 capitalize">· {i.interaction_type.replace('_', ' ')}</span>
+                          )}
+                        </div>
+                        {i.subject && i.subject !== 'Note' && (
+                          <div className={`text-sm font-medium mb-1 ${isAmendment ? 'text-red-300' : isDocSync ? 'text-amber-300' : 'text-gray-300'}`}>
+                            {i.subject}
+                          </div>
                         )}
+                        <p className="text-gray-300 text-sm whitespace-pre-wrap">{i.notes}</p>
                       </div>
-                      {i.subject && i.subject !== 'Note' && (
-                        <div className="text-gray-300 text-sm font-medium mb-1">{i.subject}</div>
-                      )}
-                      <p className="text-gray-300 text-sm whitespace-pre-wrap">{i.notes}</p>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>
