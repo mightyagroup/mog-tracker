@@ -8,6 +8,7 @@ import {
   VITALX_COMMERCIAL_CATEGORIES,
 } from '@/lib/constants'
 import { formatCurrency } from '@/lib/utils'
+import { auditCommercialStatusChange } from '@/lib/audit-notifications'
 import { CommercialStatusBadge } from './CommercialStatusBadge'
 import { CommercialDetailPanel } from './CommercialDetailPanel'
 import { EmptyState } from '@/components/common/EmptyState'
@@ -236,10 +237,14 @@ export function CommercialLeadsTable({ presetStatuses, title, accentColor = '#06
   )
 
   async function handleInlineStatus(id: string, status: CommercialStatus) {
+    const lead = leads.find(l => l.id === id)
+    const oldStatus = lead?.status || 'unknown'
     const supabase = createClient()
     await supabase.from('commercial_leads').update({ status }).eq('id', id)
     setLeads(prev => prev.map(l => l.id === id ? { ...l, status } : l))
     if (selectedLead?.id === id) setSelectedLead(prev => prev ? { ...prev, status } : null)
+    // Audit notification for high-stakes commercial status changes
+    auditCommercialStatusChange(id, lead?.organization_name || 'Unknown', ENTITY, oldStatus, status)
   }
 }
 

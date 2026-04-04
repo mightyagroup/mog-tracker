@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
 interface PricingSaveRequest {
@@ -59,6 +60,45 @@ export async function POST(request: Request) {
       .select()
 
     if (error) throw error
+
+    // Audit notification for pricing saves -- notify admin users
+    try {
+      const adminSb = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      )
+      // Get the lead title for context
+      let leadTitle = 'Unknown lead'
+      let entity = pricingType === 'commercial' ? 'vitalx' : 'exousia'
+      if (govLeadId) {
+        const { data: lead } = await supabase.from('gov_leads').select('title, entity').eq('id', govLeadId).single()
+        if (lead) { leadTitle = lead.title; entity = lead.entity }
+      } else if (commercialLeadId) {
+        const { data: lead } = await supabase.from('commercial_leads').select('organization_name, entity').eq('id', commercialLeadId).single()
+        if (lead) { leadTitle = lead.organization_name; entity = lead.entity }
+      }
+      // Get performer name
+      const { data: profile } = await adminSb.from('user_profiles').select('display_name, email').eq('user_id', user.id).single()
+      const actor = profile?.display_name || profile?.email || user.email || 'Unknown user'
+      // Get admin users to notify (excluding current user)
+      const { data: admins } = await adminSb.from('user_profiles').select('user_id').eq('role', 'admin').eq('is_active', true).neq('user_id', user.id)
+      if (admins && admins.length > 0) {
+        const fmtPrice = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(totalPrice)
+        await adminSb.from('notifications').insert(
+          admins.map(a => ({
+            user_id: a.user_id,
+            notification_type: 'system',
+            title: `Pricing updated`,
+            message: `${actor} saved pricing for "${leadTitle}" -- ${fmtPrice} at ${marginPercent}% margin`,
+            link: `/${entity}`,
+            entity,
+            is_read: false,
+          }))
+        )
+      }
+    } catch (auditErr) {
+      console.warn('Audit notification for pricing failed:', auditErr)
+    }
 
     return NextResponse.json({ success: true, data })
   } catch (error) {

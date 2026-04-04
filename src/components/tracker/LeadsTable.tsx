@@ -8,6 +8,7 @@ import {
   SOURCE_REGION, REGION_LABELS,
 } from '@/lib/constants'
 import { formatCurrency, exportLeadsToCSV, isLowFit } from '@/lib/utils'
+import { auditGovStatusChange } from '@/lib/audit-notifications'
 import { formatDistanceToNowStrict, parseISO, format } from 'date-fns'
 import { StatusBadge } from './StatusBadge'
 import { CategoryBadge } from './CategoryBadge'
@@ -226,9 +227,13 @@ export function LeadsTable({
 
   // ── Status change (inline or bulk) ────────────────────────────────────────
   async function handleStatusChange(leadId: string, newStatus: LeadStatus) {
+    const lead = leads.find(l => l.id === leadId)
+    const oldStatus = lead?.status || 'unknown'
     const supabase = createClient()
     await supabase.from('gov_leads').update({ status: newStatus }).eq('id', leadId)
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status: newStatus } : l))
+    // Audit notification for high-stakes status changes
+    auditGovStatusChange(leadId, lead?.title || 'Unknown', entity, oldStatus, newStatus)
     if (selectedLead?.id === leadId) setSelectedLead(prev => prev ? { ...prev, status: newStatus } : null)
     // Refresh compliance progress for this lead after status change (it may have gotten new items)
     if (newStatus === 'active_bid') {
@@ -245,10 +250,16 @@ export function LeadsTable({
   async function handleBulkStatus(newStatus: LeadStatus) {
     const supabase = createClient()
     const ids = Array.from(selectedIds)
+    // Capture old statuses for audit
+    const affectedLeads = leads.filter(l => selectedIds.has(l.id))
     await supabase.from('gov_leads').update({ status: newStatus }).in('id', ids)
     setLeads(prev => prev.map(l => selectedIds.has(l.id) ? { ...l, status: newStatus } : l))
     setSelectedIds(new Set())
     setBulkStatusOpen(false)
+    // Audit each high-stakes change
+    affectedLeads.forEach(l => {
+      auditGovStatusChange(l.id, l.title, entity, l.status, newStatus)
+    })
   }
 
   function handleLeadUpdate(updated: GovLead) {

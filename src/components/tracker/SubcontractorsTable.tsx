@@ -7,6 +7,7 @@ import { Modal } from '@/components/common/Modal'
 import { EmptyState } from '@/components/common/EmptyState'
 import { LoadingPage } from '@/components/common/LoadingSpinner'
 import { Building2, Plus, ExternalLink, ChevronDown, ChevronUp, Star, Zap } from 'lucide-react'
+import { auditSubcontractorAdded } from '@/lib/audit-notifications'
 
 interface SubcontractorsTableProps {
   entity: EntityType
@@ -81,6 +82,8 @@ export function SubcontractorsTable({ entity }: SubcontractorsTableProps) {
       setSubs(prev => [...prev, data].sort((a, b) => (b.fit_score ?? 0) - (a.fit_score ?? 0)))
       setShowModal(false)
       setShowQuickAdd(false)
+      // Audit notification for new subcontractor
+      auditSubcontractorAdded(payload.company_name, payload.entities_associated || [entity])
       setForm({ ...EMPTY_SUB, entities_associated: [entity] })
     }
     setSaving(false)

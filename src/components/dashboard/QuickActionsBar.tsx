@@ -6,6 +6,7 @@ import { EntityType, ServiceCategory } from '@/lib/types'
 import { AddLeadModal } from '@/components/tracker/AddLeadModal'
 import { Modal } from '@/components/common/Modal'
 import { Plus, ChevronDown, Check } from 'lucide-react'
+import { auditSubcontractorAdded } from '@/lib/audit-notifications'
 
 const ENTITY_CONFIG: Record<EntityType, { label: string; accent: string; defaultLead?: string }> = {
   exousia:   { label: 'Exousia Solutions', accent: '#D4AF37' },
@@ -297,6 +298,7 @@ function AddSubcontractorModal({ onClose, onSave }: { onClose: () => void; onSav
       notes: form.notes || null,
     })
     setSaving(false)
+    auditSubcontractorAdded(form.company_name.trim(), form.entities_associated as EntityType[])
     onSave()
   }
 
