@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Contact, Interaction, EntityType } from '@/lib/types'
 import { EmptyState } from '@/components/common/EmptyState'
 import { Modal } from '@/components/common/Modal'
-import { Users, Plus, X, Phone, Mail, ExternalLink, MessageSquare, Calendar, ChevronRight, Search } from 'lucide-react'
+import { Users, Plus, X, Phone, Mail, ExternalLink, MessageSquare, Calendar, ChevronRight, Search, Pencil } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 
 const CONTACT_TYPES = ['general', 'prospect', 'partner', 'contracting_officer', 'mentor', 'vendor', 'subcontractor']
@@ -266,6 +266,21 @@ function ContactInteractionPanel({
   const [interactions, setInteractions] = useState<Interaction[]>([])
   const [loadingInt, setLoadingInt] = useState(true)
   const [showAddInteraction, setShowAddInteraction] = useState(false)
+  const [editMode, setEditMode] = useState(false)
+  const [editForm, setEditForm] = useState({
+    first_name: contact.first_name,
+    last_name: contact.last_name,
+    title: contact.title ?? '',
+    organization: contact.organization ?? '',
+    email: contact.email ?? '',
+    phone: contact.phone ?? '',
+    linkedin: contact.linkedin ?? '',
+    contact_type: contact.contact_type ?? 'general',
+    entities_associated: contact.entities_associated ?? [entity],
+    next_follow_up: contact.next_follow_up ?? '',
+    relationship_notes: contact.relationship_notes ?? '',
+  })
+  const [savingEdit, setSavingEdit] = useState(false)
 
   useEffect(() => {
     fetchInteractions()
@@ -317,7 +332,37 @@ function ContactInteractionPanel({
     }
   }
 
+  async function handleEditSave() {
+    if (!editForm.first_name.trim() || !editForm.last_name.trim()) return
+    setSavingEdit(true)
+    const supabase = createClient()
+    const { data, error } = await supabase
+      .from('contacts')
+      .update({
+        first_name: editForm.first_name.trim(),
+        last_name: editForm.last_name.trim(),
+        title: editForm.title || null,
+        organization: editForm.organization || null,
+        email: editForm.email || null,
+        phone: editForm.phone || null,
+        linkedin: editForm.linkedin || null,
+        contact_type: editForm.contact_type,
+        entities_associated: editForm.entities_associated,
+        next_follow_up: editForm.next_follow_up || null,
+        relationship_notes: editForm.relationship_notes || null,
+      })
+      .eq('id', contact.id)
+      .select()
+      .single()
+    if (!error && data) {
+      onUpdate(data as Contact)
+      setEditMode(false)
+    }
+    setSavingEdit(false)
+  }
+
   const lbl = 'block text-xs text-gray-500 mb-1'
+  const editInp = 'w-full bg-[#111827] border border-[#374151] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-1 transition'
 
   return (
     <div className="fixed inset-0 z-40 flex items-stretch justify-end">
@@ -325,29 +370,131 @@ function ContactInteractionPanel({
       <div className="relative w-full max-w-lg bg-[#1A2233] border-l border-[#374151] flex flex-col h-full shadow-2xl">
         {/* Header */}
         <div className="flex items-start justify-between px-6 py-5 border-b border-[#374151] flex-shrink-0">
-          <div>
-            <h2 className="text-white font-semibold text-lg">{contact.first_name} {contact.last_name}</h2>
-            {(contact.title || contact.organization) && (
-              <p className="text-gray-400 text-sm">
-                {[contact.title, contact.organization].filter(Boolean).join(' · ')}
-              </p>
+          <div className="flex-1 min-w-0">
+            {editMode ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className={lbl}>First Name *</label><input className={editInp} value={editForm.first_name} onChange={e => setEditForm(f => ({ ...f, first_name: e.target.value }))} /></div>
+                  <div><label className={lbl}>Last Name *</label><input className={editInp} value={editForm.last_name} onChange={e => setEditForm(f => ({ ...f, last_name: e.target.value }))} /></div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className={lbl}>Title</label><input className={editInp} value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} /></div>
+                  <div><label className={lbl}>Organization</label><input className={editInp} value={editForm.organization} onChange={e => setEditForm(f => ({ ...f, organization: e.target.value }))} /></div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className={lbl}>Email</label><input type="email" className={editInp} value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} /></div>
+                  <div><label className={lbl}>Phone</label><input className={editInp} value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} /></div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className={lbl}>LinkedIn URL</label><input className={editInp} value={editForm.linkedin} onChange={e => setEditForm(f => ({ ...f, linkedin: e.target.value }))} /></div>
+                  <div>
+                    <label className={lbl}>Contact Type</label>
+                    <select className={editInp} value={editForm.contact_type} onChange={e => setEditForm(f => ({ ...f, contact_type: e.target.value }))}>
+                      {CONTACT_TYPES.map(t => <option key={t} value={t}>{CONTACT_TYPE_LABELS[t]}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className={lbl}>Associated Entities</label>
+                  <div className="flex gap-2 mt-1">
+                    {(['exousia', 'vitalx', 'ironhouse'] as const).map(ent => {
+                      const checked = (editForm.entities_associated ?? []).includes(ent)
+                      return (
+                        <button
+                          key={ent}
+                          type="button"
+                          onClick={() => setEditForm(f => ({
+                            ...f,
+                            entities_associated: checked
+                              ? (f.entities_associated ?? []).filter(x => x !== ent)
+                              : [...(f.entities_associated ?? []), ent],
+                          }))}
+                          className="px-3 py-1 text-xs rounded-lg border transition capitalize"
+                          style={checked ? { backgroundColor: accentColor + '22', borderColor: accentColor, color: accentColor } : { borderColor: '#374151', color: '#9CA3AF' }}
+                        >
+                          {ent === 'exousia' ? 'Exousia' : ent === 'vitalx' ? 'VitalX' : 'IronHouse'}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <label className={lbl}>Next Follow-Up</label>
+                  <input type="date" className={editInp} value={editForm.next_follow_up} onChange={e => setEditForm(f => ({ ...f, next_follow_up: e.target.value }))} />
+                </div>
+                <div>
+                  <label className={lbl}>Relationship Notes</label>
+                  <textarea className={`${editInp} resize-none`} rows={2} value={editForm.relationship_notes} onChange={e => setEditForm(f => ({ ...f, relationship_notes: e.target.value }))} />
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    onClick={() => setEditMode(false)}
+                    className="px-3 py-1.5 text-xs text-gray-400 hover:text-white transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleEditSave}
+                    disabled={savingEdit || !editForm.first_name.trim() || !editForm.last_name.trim()}
+                    className="px-4 py-1.5 text-xs font-semibold rounded-lg text-[#111827] disabled:opacity-50 transition"
+                    style={{ backgroundColor: accentColor }}
+                  >
+                    {savingEdit ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <h2 className="text-white font-semibold text-lg">{contact.first_name} {contact.last_name}</h2>
+                {(contact.title || contact.organization) && (
+                  <p className="text-gray-400 text-sm">
+                    {[contact.title, contact.organization].filter(Boolean).join(' · ')}
+                  </p>
+                )}
+                <div className="flex items-center gap-3 mt-2">
+                  {contact.email && (
+                    <a href={`mailto:${contact.email}`} className="flex items-center gap-1 text-xs text-gray-400 hover:text-white">
+                      <Mail size={12} />{contact.email}
+                    </a>
+                  )}
+                  {contact.phone && (
+                    <a href={`tel:${contact.phone}`} className="flex items-center gap-1 text-xs text-gray-400 hover:text-white">
+                      <Phone size={12} />{contact.phone}
+                    </a>
+                  )}
+                </div>
+              </>
             )}
-            <div className="flex items-center gap-3 mt-2">
-              {contact.email && (
-                <a href={`mailto:${contact.email}`} className="flex items-center gap-1 text-xs text-gray-400 hover:text-white">
-                  <Mail size={12} />{contact.email}
-                </a>
-              )}
-              {contact.phone && (
-                <a href={`tel:${contact.phone}`} className="flex items-center gap-1 text-xs text-gray-400 hover:text-white">
-                  <Phone size={12} />{contact.phone}
-                </a>
-              )}
-            </div>
           </div>
-          <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-[#374151] flex-shrink-0">
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-1 flex-shrink-0 ml-3">
+            {!editMode && (
+              <button
+                onClick={() => {
+                  setEditForm({
+                    first_name: contact.first_name,
+                    last_name: contact.last_name,
+                    title: contact.title ?? '',
+                    organization: contact.organization ?? '',
+                    email: contact.email ?? '',
+                    phone: contact.phone ?? '',
+                    linkedin: contact.linkedin ?? '',
+                    contact_type: contact.contact_type ?? 'general',
+                    entities_associated: contact.entities_associated ?? [entity],
+                    next_follow_up: contact.next_follow_up ?? '',
+                    relationship_notes: contact.relationship_notes ?? '',
+                  })
+                  setEditMode(true)
+                }}
+                className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-[#374151]"
+                title="Edit contact"
+              >
+                <Pencil size={16} />
+              </button>
+            )}
+            <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-[#374151]">
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {/* Interaction log */}

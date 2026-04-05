@@ -6,7 +6,7 @@ import { Subcontractor, EntityType } from '@/lib/types'
 import { Modal } from '@/components/common/Modal'
 import { EmptyState } from '@/components/common/EmptyState'
 import { LoadingPage } from '@/components/common/LoadingSpinner'
-import { Building2, Plus, ExternalLink, ChevronDown, ChevronUp, Star, Zap, Trash2 } from 'lucide-react'
+import { Building2, Plus, ExternalLink, ChevronDown, ChevronUp, Star, Zap, Trash2, Pencil } from 'lucide-react'
 import { auditSubcontractorAdded } from '@/lib/audit-notifications'
 
 interface SubcontractorsTableProps {
@@ -54,6 +54,7 @@ export function SubcontractorsTable({ entity }: SubcontractorsTableProps) {
   const [tagFilter, setTagFilter] = useState<string>('')
   const [typeFilter, setTypeFilter] = useState<'all' | 'teaming_partner' | 'fulfillment_sub'>('all')
   const [search, setSearch] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
 
@@ -89,6 +90,52 @@ export function SubcontractorsTable({ entity }: SubcontractorsTableProps) {
       setForm({ ...EMPTY_SUB, entities_associated: [entity] })
     }
     setSaving(false)
+  }
+
+  async function handleUpdate(payload: typeof form) {
+    if (!editingId) return
+    setSaving(true)
+    const supabase = createClient()
+    const { data, error } = await supabase
+      .from('subcontractors')
+      .update({ ...payload })
+      .eq('id', editingId)
+      .select()
+      .single()
+    if (!error && data) {
+      setSubs(prev => prev.map(s => s.id === editingId ? data : s).sort((a, b) => (b.fit_score ?? 0) - (a.fit_score ?? 0)))
+      setShowModal(false)
+      setEditingId(null)
+      setForm({ ...EMPTY_SUB, entities_associated: [entity] })
+    }
+    setSaving(false)
+  }
+
+  function openEdit(sub: Subcontractor) {
+    setEditingId(sub.id)
+    setForm({
+      company_name: sub.company_name,
+      contact_name: sub.contact_name ?? '',
+      contact_email: sub.contact_email ?? '',
+      contact_phone: sub.contact_phone ?? '',
+      website: sub.website ?? '',
+      uei: sub.uei ?? '',
+      cage_code: sub.cage_code ?? '',
+      certifications: sub.certifications ?? [],
+      naics_codes: sub.naics_codes ?? [],
+      set_asides: sub.set_asides ?? [],
+      service_tags: sub.service_tags ?? [],
+      services_offered: sub.services_offered ?? '',
+      geographic_coverage: sub.geographic_coverage ?? '',
+      entities_associated: sub.entities_associated ?? [entity],
+      sub_type: sub.sub_type ?? 'teaming_partner',
+      teaming_agreement_status: sub.teaming_agreement_status ?? 'none',
+      teaming_agreement_url: sub.teaming_agreement_url ?? '',
+      fit_score: sub.fit_score ?? 0,
+      reputation_rating: sub.reputation_rating ?? 0,
+      notes: sub.notes ?? '',
+    })
+    setShowModal(true)
   }
 
   async function handleConfirmDelete() {
@@ -253,6 +300,7 @@ export function SubcontractorsTable({ entity }: SubcontractorsTableProps) {
               sub={sub}
               expanded={expandedId === sub.id}
               onToggle={() => setExpandedId(expandedId === sub.id ? null : sub.id)}
+              onEdit={() => openEdit(sub)}
               onDelete={() => setPendingDeleteId(sub.id)}
             />
           ))}
@@ -272,18 +320,18 @@ export function SubcontractorsTable({ entity }: SubcontractorsTableProps) {
       {/* ── Full Add Teaming Partner modal ── */}
       {showModal && (
         <Modal
-          title="Add Teaming Partner"
-          onClose={() => setShowModal(false)}
+          title={editingId ? "Edit Subcontractor" : "Add Teaming Partner"}
+          onClose={() => { setShowModal(false); setEditingId(null); setForm({ ...EMPTY_SUB, entities_associated: [entity] }) }}
           size="lg"
           footer={
             <>
-              <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm text-gray-400 hover:text-white transition">Cancel</button>
+              <button onClick={() => { setShowModal(false); setEditingId(null); setForm({ ...EMPTY_SUB, entities_associated: [entity] }) }} className="px-4 py-2 text-sm text-gray-400 hover:text-white transition">Cancel</button>
               <button
-                onClick={() => handleSave(form)}
+                onClick={() => editingId ? handleUpdate(form) : handleSave(form)}
                 disabled={saving || !form.company_name}
                 className="px-5 py-2 bg-[#D4AF37] hover:bg-[#b8952e] disabled:opacity-50 text-[#111827] font-semibold text-sm rounded-lg transition"
               >
-                {saving ? 'Saving...' : 'Save'}
+                {saving ? 'Saving...' : editingId ? 'Update' : 'Save'}
               </button>
             </>
           }
@@ -325,6 +373,36 @@ export function SubcontractorsTable({ entity }: SubcontractorsTableProps) {
                 <option value="executed">Executed</option>
               </select>
             </FormField>
+            <FormField label="Sub Type">
+              <select className={inputCls} value={form.sub_type ?? 'teaming_partner'} onChange={e => setForm(f => ({ ...f, sub_type: e.target.value as 'teaming_partner' | 'fulfillment_sub' }))}>
+                <option value="teaming_partner">Teaming Partner</option>
+                <option value="fulfillment_sub">Fulfillment Sub</option>
+              </select>
+            </FormField>
+            <div className="col-span-2">
+              <FormField label="Associated Entities">
+                <div className="flex gap-3 mt-1">
+                  {(['exousia', 'vitalx', 'ironhouse'] as EntityType[]).map(ent => (
+                    <label key={ent} className="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={(form.entities_associated ?? []).includes(ent)}
+                        onChange={e => {
+                          setForm(f => ({
+                            ...f,
+                            entities_associated: e.target.checked
+                              ? [...(f.entities_associated ?? []), ent]
+                              : (f.entities_associated ?? []).filter(x => x !== ent),
+                          }))
+                        }}
+                        className="accent-[#D4AF37]"
+                      />
+                      {ent === 'exousia' ? 'Exousia' : ent === 'vitalx' ? 'VitalX' : 'IronHouse'}
+                    </label>
+                  ))}
+                </div>
+              </FormField>
+            </div>
             <FormField label="Website">
               <input type="url" className={inputCls} value={form.website ?? ''} onChange={e => setForm(f => ({ ...f, website: e.target.value }))} />
             </FormField>
@@ -461,7 +539,7 @@ function QuickAddModal({
 }
 
 // ── SubCard ───────────────────────────────────────────────────────────────────
-function SubCard({ sub, expanded, onToggle, onDelete }: { sub: Subcontractor; expanded: boolean; onToggle: () => void; onDelete: () => void }) {
+function SubCard({ sub, expanded, onToggle, onEdit, onDelete }: { sub: Subcontractor; expanded: boolean; onToggle: () => void; onEdit: () => void; onDelete: () => void }) {
   const score = sub.fit_score ?? 0
   const scoreColor = score >= 80 ? '#4ADE80' : score >= 60 ? '#FCD34D' : '#9CA3AF'
   const isTeaming = sub.sub_type === 'teaming_partner'
@@ -524,6 +602,16 @@ function SubCard({ sub, expanded, onToggle, onDelete }: { sub: Subcontractor; ex
             <button
               onClick={(e) => {
                 e.stopPropagation()
+                onEdit()
+              }}
+              className="opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-[#253347] transition"
+              title="Edit subcontractor"
+            >
+              <Pencil size={14} className="text-[#D4AF37]" />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
                 onDelete()
               }}
               className="opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-red-900/50 transition"
@@ -538,6 +626,16 @@ function SubCard({ sub, expanded, onToggle, onDelete }: { sub: Subcontractor; ex
 
       {expanded && (
         <div className="px-5 pb-5 pt-3 border-t border-[#374151] space-y-4 text-sm">
+          {/* Edit button in expanded view */}
+          <div className="flex justify-end">
+            <button
+              onClick={onEdit}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-[#D4AF37]/10 text-[#D4AF37] hover:bg-[#D4AF37]/20 transition"
+            >
+              <Pencil size={12} />
+              Edit
+            </button>
+          </div>
           {/* Service tags full list */}
           {(sub.service_tags ?? []).length > 0 && (
             <div>
