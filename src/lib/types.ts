@@ -1,4 +1,5 @@
 export type EntityType = 'exousia' | 'vitalx' | 'ironhouse'
+export type ComplianceEntityType = EntityType | 'mog'
 
 export type LeadStatus =
   | 'new'

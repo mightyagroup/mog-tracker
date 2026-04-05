@@ -2,20 +2,20 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { EntityType } from '@/lib/types'
+import { ComplianceEntityType } from '@/lib/types'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Modal } from '@/components/common/Modal'
 import { EmptyState } from '@/components/common/EmptyState'
 import { CalendarCheck, Plus, X, AlertTriangle, CheckCircle, Clock, DollarSign, ChevronLeft, ChevronRight, LayoutList, Calendar } from 'lucide-react'
 import { format, parseISO, differenceInDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay, addMonths, subMonths } from 'date-fns'
 
-type RecordType = 'registration' | 'certification' | 'subscription'
+type RecordType = 'registration' | 'certification' | 'subscription' | 'insurance'
 type RecordStatus = 'active' | 'expiring_soon' | 'expired' | 'cancelled' | 'pending'
 
 interface ComplianceRecord {
   id: string
   record_type: RecordType
-  entity: EntityType
+  entity: ComplianceEntityType
   name: string
   status: RecordStatus
   start_date?: string | null
@@ -31,15 +31,17 @@ interface ComplianceRecord {
   updated_at: string
 }
 
-const ENTITY_COLORS: Record<EntityType, string> = {
+const ENTITY_COLORS: Record<ComplianceEntityType, string> = {
   exousia: '#D4AF37',
   vitalx:  '#06A59A',
   ironhouse: '#B45309',
+  mog: '#D4AF37',
 }
-const ENTITY_LABELS: Record<EntityType, string> = {
+const ENTITY_LABELS: Record<ComplianceEntityType, string> = {
   exousia: 'Exousia',
   vitalx: 'VitalX',
   ironhouse: 'IronHouse',
+  mog: 'MOG',
 }
 const STATUS_CONFIG: Record<RecordStatus, { label: string; color: string; bg: string }> = {
   active:        { label: 'Active',        color: '#4ADE80', bg: '#4ADE8022' },
@@ -81,7 +83,7 @@ export default function CompliancePage() {
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'registrations' | 'subscriptions'>('registrations')
   const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table')
-  const [entityFilter, setEntityFilter] = useState<EntityType | ''>('')
+  const [entityFilter, setEntityFilter] = useState<ComplianceEntityType | ''>('')
   const [showAdd, setShowAdd] = useState(false)
   const [selected, setSelected] = useState<ComplianceRecord | null>(null)
 
@@ -170,7 +172,7 @@ export default function CompliancePage() {
               <div className="text-white font-bold text-xl">${totalMonthly.toFixed(0)}<span className="text-gray-500 text-sm font-normal">/mo</span></div>
               <div className="text-gray-500 text-xs mt-1">${(totalMonthly * 12).toFixed(0)}/yr</div>
             </div>
-            {(['exousia', 'vitalx', 'ironhouse'] as EntityType[]).map(e => (
+            {(['mog', 'exousia', 'vitalx', 'ironhouse'] as ComplianceEntityType[]).map(e => (
               <div key={e} className="bg-[#1F2937] rounded-xl border border-[#374151] p-4">
                 <div className="text-xs mb-1" style={{ color: ENTITY_COLORS[e] }}>{ENTITY_LABELS[e]}</div>
                 <div className="text-white font-bold text-lg">${(totalMonthlyByEntity[e] ?? 0).toFixed(0)}<span className="text-gray-500 text-sm font-normal">/mo</span></div>
@@ -223,7 +225,7 @@ export default function CompliancePage() {
                 className="px-4 py-2 text-sm font-medium transition"
                 style={tab === 'registrations' ? { backgroundColor: '#D4AF3722', color: '#D4AF37' } : { color: '#9CA3AF' }}
               >
-                Registrations &amp; Certs
+                Registrations, Certs &amp; Insurance
               </button>
               <button
                 onClick={() => setTab('subscriptions')}
@@ -256,10 +258,11 @@ export default function CompliancePage() {
 
             <select
               value={entityFilter}
-              onChange={e => setEntityFilter(e.target.value as EntityType | '')}
+              onChange={e => setEntityFilter(e.target.value as ComplianceEntityType | '')}
               className="bg-[#1F2937] border border-[#374151] rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none"
             >
               <option value="">All Entities</option>
+              <option value="mog">MOG</option>
               <option value="exousia">Exousia</option>
               <option value="vitalx">VitalX</option>
               <option value="ironhouse">IronHouse</option>
@@ -553,7 +556,7 @@ function CalendarView({
       {/* Legend */}
       <div className="flex items-center gap-4 px-5 py-3 border-t border-[#374151]">
         <span className="text-gray-500 text-xs">Entity:</span>
-        {(['exousia', 'vitalx', 'ironhouse'] as EntityType[]).map(e => (
+        {(['mog', 'exousia', 'vitalx', 'ironhouse'] as ComplianceEntityType[]).map(e => (
           <div key={e} className="flex items-center gap-1.5">
             <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: ENTITY_COLORS[e] }} />
             <span className="text-xs text-gray-400 capitalize">{e}</span>
@@ -702,7 +705,8 @@ function RecordDetailPanel({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={lbl}>Entity</label>
-                  <select className={inp} value={form.entity} onChange={e => setForm(f => ({ ...f, entity: e.target.value as EntityType }))}>
+                  <select className={inp} value={form.entity} onChange={e => setForm(f => ({ ...f, entity: e.target.value as ComplianceEntityType }))}>
+                    <option value="mog">MOG</option>
                     <option value="exousia">Exousia</option>
                     <option value="vitalx">VitalX</option>
                     <option value="ironhouse">IronHouse</option>
@@ -713,6 +717,7 @@ function RecordDetailPanel({
                   <select className={inp} value={form.record_type} onChange={e => setForm(f => ({ ...f, record_type: e.target.value as RecordType }))}>
                     <option value="registration">Registration</option>
                     <option value="certification">Certification</option>
+                    <option value="insurance">Insurance</option>
                     <option value="subscription">Subscription</option>
                   </select>
                 </div>
@@ -851,7 +856,7 @@ function AddRecordModal({
 }) {
   const [form, setForm] = useState({
     record_type: defaultType,
-    entity: 'exousia' as EntityType,
+    entity: 'exousia' as ComplianceEntityType,
     name: '',
     status: 'active' as RecordStatus,
     start_date: '',
@@ -922,12 +927,14 @@ function AddRecordModal({
           <select className={inp} value={form.record_type} onChange={e => setForm(f => ({ ...f, record_type: e.target.value as RecordType }))}>
             <option value="registration">Registration</option>
             <option value="certification">Certification</option>
+            <option value="insurance">Insurance</option>
             <option value="subscription">Subscription / Tool</option>
           </select>
         </div>
         <div>
           <label className={lbl}>Entity</label>
-          <select className={inp} value={form.entity} onChange={e => setForm(f => ({ ...f, entity: e.target.value as EntityType }))}>
+          <select className={inp} value={form.entity} onChange={e => setForm(f => ({ ...f, entity: e.target.value as ComplianceEntityType }))}>
+            <option value="mog">MOG</option>
             <option value="exousia">Exousia</option>
             <option value="vitalx">VitalX</option>
             <option value="ironhouse">IronHouse</option>
