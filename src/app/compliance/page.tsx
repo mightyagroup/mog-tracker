@@ -6,7 +6,7 @@ import { ComplianceEntityType } from '@/lib/types'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Modal } from '@/components/common/Modal'
 import { EmptyState } from '@/components/common/EmptyState'
-import { CalendarCheck, Plus, X, AlertTriangle, CheckCircle, Clock, DollarSign, ChevronLeft, ChevronRight, LayoutList, Calendar } from 'lucide-react'
+import { CalendarCheck, Plus, X, AlertTriangle, CheckCircle, Clock, DollarSign, ChevronLeft, ChevronRight, LayoutList, Calendar, Trash2 } from 'lucide-react'
 import { format, parseISO, differenceInDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay, addMonths, subMonths } from 'date-fns'
 
 type RecordType = 'registration' | 'certification' | 'subscription' | 'insurance'
@@ -293,9 +293,9 @@ export default function CompliancePage() {
               action={{ label: 'Add Record', onClick: () => setShowAdd(true) }}
             />
           ) : tab === 'registrations' ? (
-            <RegistrationsTable records={displayed} onSelect={setSelected} />
+            <RegistrationsTable records={displayed} onSelect={setSelected} onDelete={id => { setRecords(prev => prev.filter(r => r.id !== id)); setSelected(null) }} />
           ) : (
-            <SubscriptionsTable records={displayed} onSelect={setSelected} />
+            <SubscriptionsTable records={displayed} onSelect={setSelected} onDelete={id => { setRecords(prev => prev.filter(r => r.id !== id)); setSelected(null) }} />
           )}
         </main>
       </div>
@@ -323,10 +323,36 @@ export default function CompliancePage() {
   )
 }
 
+// ── Inline Delete Confirmation ────────────────────────────────────────────────
+function useInlineDelete(onDelete: (id: string) => void) {
+  const [pendingId, setPendingId] = useState<string | null>(null)
+
+  async function confirmDelete() {
+    if (!pendingId) return
+    const supabase = createClient()
+    await supabase.from('compliance_records').delete().eq('id', pendingId)
+    onDelete(pendingId)
+    setPendingId(null)
+  }
+
+  return { pendingId, setPendingId, confirmDelete }
+}
+
 // ── Registrations Table ───────────────────────────────────────────────────────
-function RegistrationsTable({ records, onSelect }: { records: ComplianceRecord[]; onSelect: (r: ComplianceRecord) => void }) {
+function RegistrationsTable({ records, onSelect, onDelete }: { records: ComplianceRecord[]; onSelect: (r: ComplianceRecord) => void; onDelete: (id: string) => void }) {
+  const { pendingId, setPendingId, confirmDelete } = useInlineDelete(onDelete)
+
   return (
     <div className="bg-[#1F2937] rounded-xl border border-[#374151] overflow-hidden">
+      {pendingId && (
+        <div className="px-4 py-3 bg-red-900/30 border-b border-red-800/50 flex items-center justify-between">
+          <span className="text-red-300 text-sm">Delete "{records.find(r => r.id === pendingId)?.name}"?</span>
+          <div className="flex gap-2">
+            <button onClick={() => setPendingId(null)} className="px-3 py-1 text-xs text-gray-400 hover:text-white">Cancel</button>
+            <button onClick={confirmDelete} className="px-3 py-1 text-xs font-semibold rounded bg-red-600 text-white">Delete</button>
+          </div>
+        </div>
+      )}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -337,13 +363,14 @@ function RegistrationsTable({ records, onSelect }: { records: ComplianceRecord[]
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Status</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Expiration</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Days Until Due</th>
+              <th className="px-4 py-3 w-10"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#374151]">
             {records.map(r => {
               const { label, color, bg, days } = computeStatus(r)
               return (
-                <tr key={r.id} onClick={() => onSelect(r)} className="hover:bg-[#253347] cursor-pointer transition">
+                <tr key={r.id} onClick={() => onSelect(r)} className="hover:bg-[#253347] cursor-pointer transition group">
                   <td className="px-4 py-3">
                     <div className="text-white font-medium">{r.name}</div>
                     {r.notes && <div className="text-gray-500 text-xs truncate max-w-xs">{r.notes}</div>}
@@ -363,6 +390,15 @@ function RegistrationsTable({ records, onSelect }: { records: ComplianceRecord[]
                   <td className="px-4 py-3">
                     <DaysUntilBadge days={days} />
                   </td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={e => { e.stopPropagation(); setPendingId(r.id) }}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-red-900/40 text-gray-600 hover:text-red-400 transition-all"
+                      title="Delete record"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </td>
                 </tr>
               )
             })}
@@ -374,9 +410,20 @@ function RegistrationsTable({ records, onSelect }: { records: ComplianceRecord[]
 }
 
 // ── Subscriptions Table ───────────────────────────────────────────────────────
-function SubscriptionsTable({ records, onSelect }: { records: ComplianceRecord[]; onSelect: (r: ComplianceRecord) => void }) {
+function SubscriptionsTable({ records, onSelect, onDelete }: { records: ComplianceRecord[]; onSelect: (r: ComplianceRecord) => void; onDelete: (id: string) => void }) {
+  const { pendingId, setPendingId, confirmDelete } = useInlineDelete(onDelete)
+
   return (
     <div className="bg-[#1F2937] rounded-xl border border-[#374151] overflow-hidden">
+      {pendingId && (
+        <div className="px-4 py-3 bg-red-900/30 border-b border-red-800/50 flex items-center justify-between">
+          <span className="text-red-300 text-sm">Delete "{records.find(r => r.id === pendingId)?.name}"?</span>
+          <div className="flex gap-2">
+            <button onClick={() => setPendingId(null)} className="px-3 py-1 text-xs text-gray-400 hover:text-white">Cancel</button>
+            <button onClick={confirmDelete} className="px-3 py-1 text-xs font-semibold rounded bg-red-600 text-white">Delete</button>
+          </div>
+        </div>
+      )}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -389,6 +436,7 @@ function SubscriptionsTable({ records, onSelect }: { records: ComplianceRecord[]
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Auto-Renew</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Next Renewal</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Cancel By</th>
+              <th className="px-4 py-3 w-10"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#374151]">
@@ -397,7 +445,7 @@ function SubscriptionsTable({ records, onSelect }: { records: ComplianceRecord[]
               const renewalDays = getDaysUntilDue(r.expiration_date)
               const cancelDays = getDaysUntilDue(r.cancellation_deadline)
               return (
-                <tr key={r.id} onClick={() => onSelect(r)} className="hover:bg-[#253347] cursor-pointer transition">
+                <tr key={r.id} onClick={() => onSelect(r)} className="hover:bg-[#253347] cursor-pointer transition group">
                   <td className="px-4 py-3">
                     <div className="text-white font-medium">{r.name}</div>
                     {r.payment_method && <div className="text-gray-500 text-xs">{r.payment_method}</div>}
@@ -432,6 +480,15 @@ function SubscriptionsTable({ records, onSelect }: { records: ComplianceRecord[]
                     {cancelDays !== null && cancelDays <= 14 && cancelDays >= 0 && (
                       <DaysUntilBadge days={cancelDays} compact />
                     )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={e => { e.stopPropagation(); setPendingId(r.id) }}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-red-900/40 text-gray-600 hover:text-red-400 transition-all"
+                      title="Delete subscription"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </td>
                 </tr>
               )

@@ -167,3 +167,18 @@
 - Test file previews with multiple formats (PDF, image, unsupported types) — handle graceful fallbacks
 - Structure storage paths to support bulk operations (e.g., delete all files for a lead)
 
+---
+
+## 2026-04-04 — Circular RLS Dependency Breaks All Data Access
+
+**Problem:** Migration 033 introduced RBAC with helper functions (`user_can_access_entity()`, `user_can_edit()`, etc.) that query `user_profiles` to check roles. However, `user_profiles` itself had RLS enabled with an "Admin can do everything" policy that contained `EXISTS (SELECT 1 FROM user_profiles WHERE user_id = auth.uid() AND role = 'admin')`. This created a circular dependency: any RLS check on any table triggered a check on `user_profiles`, which triggered its own RLS check on `user_profiles`, which PostgreSQL resolved by returning empty results. All helper functions returned NULL, all policies evaluated to FALSE, and the entire app showed zero data across every entity tracker.
+
+**Fix:** Recreated all 4 helper functions (`get_user_role`, `get_user_entities`, `user_can_access_entity`, `user_can_edit`) with `SECURITY DEFINER SET search_path = public`. SECURITY DEFINER causes the function to execute as its owner (postgres), bypassing RLS when reading `user_profiles`. Also replaced the circular admin policy on `user_profiles` with simpler non-recursive policies that use the SECURITY DEFINER functions. Applied via migration 035_fix_rls_circular_dependency.sql.
+
+**Prevention:**
+- Never create RLS policies on a table that query the same table (directly or via functions)
+- Always use SECURITY DEFINER for helper functions that RLS policies depend on
+- When implementing RBAC, the "role lookup" table (user_profiles) must have simple, non-recursive RLS policies (e.g., `user_id = auth.uid()` for self-read)
+- Test RLS changes immediately after applying them by querying as an authenticated user, not just the service role
+- The compliance_records table still had the old generic policy and continued working, which was the key diagnostic clue (data existed but RBAC-protected tables returned nothing)
+

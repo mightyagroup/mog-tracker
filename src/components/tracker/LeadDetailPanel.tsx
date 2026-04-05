@@ -24,12 +24,14 @@ interface LeadDetailPanelProps {
   accentColor?: string
   onClose: () => void
   onUpdate: (lead: GovLead) => void
+  onDelete?: (leadId: string) => void
 }
 
-export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF37', onClose, onUpdate }: LeadDetailPanelProps) {
+export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF37', onClose, onUpdate, onDelete }: LeadDetailPanelProps) {
   const [editMode, setEditMode] = useState(false)
   const [form, setForm] = useState<Partial<GovLead>>({ ...lead })
   const [saving, setSaving] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [complianceItems, setComplianceItems] = useState<ComplianceItem[]>([])
   const [interactions, setInteractions] = useState<Interaction[]>([])
   const [loadingCompliance, setLoadingCompliance] = useState(false)
@@ -286,6 +288,14 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
       }
       setForm(f => ({ ...f, status: newStatus }))
       onUpdate(updatedLead)
+    }
+  }
+
+  async function handleDelete() {
+    const supabase = createClient()
+    await supabase.from('gov_leads').delete().eq('id', lead.id)
+    if (onDelete) {
+      onDelete(lead.id)
     }
   }
 
@@ -939,6 +949,21 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                 </div>
               )}
             </div>
+          )}
+        </div>
+
+        {/* Delete section at bottom of panel */}
+        <div className="border-t border-[#374151] px-6 py-4 mt-6 flex-shrink-0 bg-[#0f1419]">
+          {confirmDelete ? (
+            <div className="flex items-center justify-between">
+              <span className="text-red-300 text-sm">Delete this lead?</span>
+              <div className="flex gap-2">
+                <button onClick={() => setConfirmDelete(false)} className="px-3 py-1 text-xs text-gray-400 hover:text-white">Cancel</button>
+                <button onClick={handleDelete} className="px-3 py-1 text-xs font-semibold rounded bg-red-600 text-white">Delete</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setConfirmDelete(true)} className="text-xs text-gray-600 hover:text-red-400 transition">Delete lead</button>
           )}
         </div>
       </div>

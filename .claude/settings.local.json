@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx next:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(curl -s \"https://mog-tracker-app.vercel.app/api/cron/sam-feed?dryRun=1\")",
+      "Bash(python3 -m json.tool)",
+      "Bash(curl -s -H \"Authorization: Bearer mog-cron-2026-secure-key-xK9mP2\" \"https://mog-tracker-app.vercel.app/api/cron/sam-feed?dryRun=1\")",
+      "Bash(curl -s -H \"Authorization: Bearer mog-cron-2026-secure-key-xK9mP2\" \"https://mog-tracker-app.vercel.app/api/cron/sam-feed\")",
+      "Bash(node:*)",
+      "Bash(cp ~/Downloads/proposal-validator.md ~/Documents/MightyOakGroup/.claude/commands/proposal-validator.md)",
+      "Bash(cp ~/Downloads/proposal-validator.md ~/Documents/MightyOakGroup/01_VitalX/.claude/commands/proposal-validator.md)",
+      "Bash(cp ~/Downloads/proposal-validator.md ~/Documents/MightyOakGroup/02_Exousia/.claude/commands/proposal-validator.md)",
+      "Bash(cp ~/Downloads/proposal-validator.md ~/Documents/MightyOakGroup/03_Ironhouse/.claude/commands/proposal-validator.md)",
+      "Read(//Users/ellawireko-brobbey/Documents/MightyOakGroup/.claude/commands/**)",
+      "Read(//Users/ellawireko-brobbey/Documents/MightyOakGroup/01_VitalX/.claude/commands/**)",
+      "Read(//Users/ellawireko-brobbey/Documents/MightyOakGroup/02_Exousia/.claude/commands/**)",
+      "Read(//Users/ellawireko-brobbey/Documents/MightyOakGroup/03_Ironhouse/.claude/commands/**)",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Bash(grep -i \"priority\\\\|value\\\\|estimated\\\\|$\\\\|total\")",
+      "Bash(textutil:*)",
+      "Bash(python3:*)"
+    ]
+  }
+}

@@ -21,7 +21,7 @@ import { EmptyState } from '@/components/common/EmptyState'
 import { LoadingPage } from '@/components/common/LoadingSpinner'
 import {
   Download, Search, SlidersHorizontal, X, ArrowUpDown, ArrowUp, ArrowDown,
-  ChevronDown, FileSearch, Upload, AlertTriangle, Bell,
+  ChevronDown, FileSearch, Upload, AlertTriangle, Bell, Trash2,
 } from 'lucide-react'
 
 /** Amendment indicator badge */
@@ -119,6 +119,7 @@ export function LeadsTable({
   const [bulkStatusOpen, setBulkStatusOpen] = useState(false)
   const [merging, setMerging] = useState(false)
   const [recategorizing, setRecategorizing] = useState(false)
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const bulkRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => { fetchData() }, [entity])
@@ -271,6 +272,12 @@ export function LeadsTable({
     setLeads(prev => [lead, ...prev])
     setShowAddModal(false)
     setSelectedLead(lead)
+  }
+
+  function handleLeadDelete(leadId: string) {
+    setLeads(prev => prev.filter(l => l.id !== leadId))
+    if (selectedLead?.id === leadId) setSelectedLead(null)
+    setPendingDeleteId(null)
   }
 
   // ── Selection ─────────────────────────────────────────────────────────────
@@ -552,6 +559,26 @@ export function LeadsTable({
         )}
       </div>
 
+      {/* Delete confirmation bar */}
+      {pendingDeleteId && (
+        <div className="mb-3 px-4 py-3 bg-red-900/30 border border-red-800/50 flex items-center justify-between rounded-lg">
+          <span className="text-red-300 text-sm">Delete "{leads.find(l => l.id === pendingDeleteId)?.title}"?</span>
+          <div className="flex gap-2">
+            <button onClick={() => setPendingDeleteId(null)} className="px-3 py-1 text-xs text-gray-400 hover:text-white">Cancel</button>
+            <button
+              onClick={async () => {
+                const supabase = createClient()
+                await supabase.from('gov_leads').delete().eq('id', pendingDeleteId)
+                handleLeadDelete(pendingDeleteId)
+              }}
+              className="px-3 py-1 text-xs font-semibold rounded bg-red-600 text-white"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       {sortedLeads.length === 0 ? (
         <EmptyState
@@ -588,6 +615,7 @@ export function LeadsTable({
                   <th className="px-4 py-3 text-left font-medium text-gray-400">Category</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-400">Source</th>
                   <SortHeader field="created_at" current={sortField} dir={sortDir} onClick={handleSort}>First Seen</SortHeader>
+                  <th className="px-4 py-3 text-left font-medium text-gray-400 w-10" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#374151]">
@@ -668,6 +696,18 @@ export function LeadsTable({
                       <td className="px-4 py-3">
                         {lead.created_at ? <FirstSeenBadge createdAt={lead.created_at} /> : <span className="text-gray-600 text-xs">—</span>}
                       </td>
+                      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                        <button
+                          onClick={e => {
+                            e.stopPropagation()
+                            setPendingDeleteId(lead.id)
+                          }}
+                          className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition p-1"
+                          title="Delete lead"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
                     </tr>
                   )
                 })}
@@ -686,6 +726,7 @@ export function LeadsTable({
           accentColor={accentColor}
           onClose={() => setSelectedLead(null)}
           onUpdate={handleLeadUpdate}
+          onDelete={handleLeadDelete}
         />
       )}
 

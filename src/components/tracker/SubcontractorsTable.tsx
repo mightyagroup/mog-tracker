@@ -6,7 +6,7 @@ import { Subcontractor, EntityType } from '@/lib/types'
 import { Modal } from '@/components/common/Modal'
 import { EmptyState } from '@/components/common/EmptyState'
 import { LoadingPage } from '@/components/common/LoadingSpinner'
-import { Building2, Plus, ExternalLink, ChevronDown, ChevronUp, Star, Zap } from 'lucide-react'
+import { Building2, Plus, ExternalLink, ChevronDown, ChevronUp, Star, Zap, Trash2 } from 'lucide-react'
 import { auditSubcontractorAdded } from '@/lib/audit-notifications'
 
 interface SubcontractorsTableProps {
@@ -54,6 +54,8 @@ export function SubcontractorsTable({ entity }: SubcontractorsTableProps) {
   const [tagFilter, setTagFilter] = useState<string>('')
   const [typeFilter, setTypeFilter] = useState<'all' | 'teaming_partner' | 'fulfillment_sub'>('all')
   const [search, setSearch] = useState('')
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchSubs() }, [entity])
@@ -87,6 +89,22 @@ export function SubcontractorsTable({ entity }: SubcontractorsTableProps) {
       setForm({ ...EMPTY_SUB, entities_associated: [entity] })
     }
     setSaving(false)
+  }
+
+  async function handleConfirmDelete() {
+    if (!pendingDeleteId) return
+    setDeleting(true)
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('subcontractors')
+      .delete()
+      .eq('id', pendingDeleteId)
+    if (!error) {
+      setSubs(prev => prev.filter(s => s.id !== pendingDeleteId))
+      setPendingDeleteId(null)
+      setExpandedId(null)
+    }
+    setDeleting(false)
   }
 
   function handleArrayField(field: 'certifications' | 'naics_codes' | 'set_asides', value: string) {
@@ -196,6 +214,30 @@ export function SubcontractorsTable({ entity }: SubcontractorsTableProps) {
         <span className="text-gray-500 text-xs ml-auto">{displayed.length} shown</span>
       </div>
 
+      {/* Delete confirmation bar */}
+      {pendingDeleteId && (
+        <div className="px-4 py-3 mb-4 bg-red-900/30 border border-red-800/50 rounded-lg flex items-center justify-between">
+          <span className="text-red-300 text-sm">
+            Delete {subs.find(s => s.id === pendingDeleteId)?.company_name}?
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPendingDeleteId(null)}
+              className="px-3 py-1 text-xs text-gray-400 hover:text-white transition"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+              className="px-3 py-1 text-xs font-semibold rounded bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white transition"
+            >
+              {deleting ? 'Deleting...' : 'Delete'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {displayed.length === 0 ? (
         <EmptyState
           icon={Building2}
@@ -211,6 +253,7 @@ export function SubcontractorsTable({ entity }: SubcontractorsTableProps) {
               sub={sub}
               expanded={expandedId === sub.id}
               onToggle={() => setExpandedId(expandedId === sub.id ? null : sub.id)}
+              onDelete={() => setPendingDeleteId(sub.id)}
             />
           ))}
         </div>
@@ -418,7 +461,7 @@ function QuickAddModal({
 }
 
 // ── SubCard ───────────────────────────────────────────────────────────────────
-function SubCard({ sub, expanded, onToggle }: { sub: Subcontractor; expanded: boolean; onToggle: () => void }) {
+function SubCard({ sub, expanded, onToggle, onDelete }: { sub: Subcontractor; expanded: boolean; onToggle: () => void; onDelete: () => void }) {
   const score = sub.fit_score ?? 0
   const scoreColor = score >= 80 ? '#4ADE80' : score >= 60 ? '#FCD34D' : '#9CA3AF'
   const isTeaming = sub.sub_type === 'teaming_partner'
@@ -426,7 +469,7 @@ function SubCard({ sub, expanded, onToggle }: { sub: Subcontractor; expanded: bo
   return (
     <div className="bg-[#1F2937] rounded-xl border border-[#374151] overflow-hidden">
       <button
-        className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-[#253347] transition"
+        className="w-full group flex items-center justify-between px-5 py-4 text-left hover:bg-[#253347] transition"
         onClick={onToggle}
       >
         <div className="flex items-center gap-4 min-w-0">
@@ -477,7 +520,19 @@ function SubCard({ sub, expanded, onToggle }: { sub: Subcontractor; expanded: bo
                 : 'No Agreement'}
             </span>
           )}
-          {expanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete()
+              }}
+              className="opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-red-900/50 transition"
+              title="Delete subcontractor"
+            >
+              <Trash2 size={14} className="text-red-400" />
+            </button>
+            {expanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+          </div>
         </div>
       </button>
 

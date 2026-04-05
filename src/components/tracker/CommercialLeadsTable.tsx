@@ -74,6 +74,10 @@ export function CommercialLeadsTable({ presetStatuses, title, accentColor = '#06
     setSelectedLead(lead)
   }
 
+  function handleDelete(leadId: string) {
+    setLeads(prev => prev.filter(l => l.id !== leadId))
+  }
+
   if (loading) return <LoadingPage />
 
   return (
@@ -215,6 +219,7 @@ export function CommercialLeadsTable({ presetStatuses, title, accentColor = '#06
           accentColor={accentColor}
           onClose={() => setSelectedLead(null)}
           onUpdate={handleUpdate}
+          onDelete={handleDelete}
         />
       )}
 

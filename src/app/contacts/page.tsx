@@ -7,7 +7,7 @@ import { Sidebar } from '@/components/layout/Sidebar'
 import { Modal } from '@/components/common/Modal'
 import { EmptyState } from '@/components/common/EmptyState'
 import { LoadingPage } from '@/components/common/LoadingSpinner'
-import { Users, Search, Plus, X, Phone, Mail, Building2, ExternalLink } from 'lucide-react'
+import { Users, Search, Plus, X, Phone, Mail, Building2, ExternalLink, Trash2 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
@@ -30,6 +30,8 @@ export default function ContactsPage() {
   const [typeFilter, setTypeFilter] = useState('')
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null)
   const [showAdd, setShowAdd] = useState(false)
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const [recentInteractions, setRecentInteractions] = useState<{ id: string; interaction_date: string; interaction_type?: string; subject?: string; notes?: string; entity?: string; contacts?: { first_name: string; last_name: string } }[]>([])
 
   useEffect(() => { fetchContacts() }, [])
@@ -126,6 +128,24 @@ export default function ContactsPage() {
     setShowAdd(false)
   }
 
+  async function handleConfirmDelete() {
+    if (!pendingDeleteId) return
+    setDeleting(true)
+    const supabase = createClient()
+    const { error } = await supabase.from('contacts').delete().eq('id', pendingDeleteId)
+    if (!error) {
+      setContacts(prev => prev.filter(c => c.id !== pendingDeleteId))
+      if (selectedContact?.id === pendingDeleteId) setSelectedContact(null)
+    }
+    setDeleting(false)
+    setPendingDeleteId(null)
+  }
+
+  function handleDeleteFromPanel(id: string) {
+    setContacts(prev => prev.filter(c => c.id !== id))
+    setSelectedContact(null)
+  }
+
   if (loading) return <LoadingPage />
 
   return (
@@ -191,6 +211,18 @@ export default function ContactsPage() {
             <span className="text-gray-500 text-xs">{filtered.length} {filtered.length === 1 ? 'contact' : 'contacts'}</span>
           </div>
 
+          {pendingDeleteId && (
+            <div className="mb-3 flex items-center gap-3 bg-red-900/30 border border-red-700/50 rounded-lg px-4 py-2.5">
+              <span className="text-red-300 text-sm">Delete this contact? This cannot be undone.</span>
+              <div className="ml-auto flex gap-2">
+                <button onClick={() => setPendingDeleteId(null)} className="px-3 py-1 text-xs text-gray-300 hover:text-white bg-[#374151] rounded-lg">Cancel</button>
+                <button onClick={handleConfirmDelete} disabled={deleting} className="px-3 py-1 text-xs font-semibold text-white bg-red-600 hover:bg-red-500 rounded-lg disabled:opacity-50">
+                  {deleting ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
+            </div>
+          )}
+
           {filtered.length === 0 ? (
             <EmptyState
               icon={Users}
@@ -211,6 +243,7 @@ export default function ContactsPage() {
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Entities</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Last Contact</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Next Follow-Up</th>
+                      <th className="w-10"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#374151]">
@@ -218,7 +251,7 @@ export default function ContactsPage() {
                       <tr
                         key={c.id}
                         onClick={() => setSelectedContact(c)}
-                        className="hover:bg-[#253347] cursor-pointer transition"
+                        className="group hover:bg-[#253347] cursor-pointer transition"
                       >
                         <td className="px-4 py-3">
                           <div className="text-white font-medium">{c.first_name} {c.last_name}</div>
@@ -250,6 +283,15 @@ export default function ContactsPage() {
                         <td className="px-4 py-3 text-xs font-medium text-[#D4AF37]">
                           {c.next_follow_up ? format(parseISO(c.next_follow_up), 'MMM d, yy') : '—'}
                         </td>
+                        <td className="px-2 py-3">
+                          <button
+                            onClick={e => { e.stopPropagation(); setPendingDeleteId(c.id) }}
+                            className="p-1 rounded text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Delete contact"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -273,6 +315,7 @@ export default function ContactsPage() {
           contact={selectedContact}
           onClose={() => setSelectedContact(null)}
           onUpdate={handleSave}
+          onDelete={handleDeleteFromPanel}
         />
       )}
 
@@ -409,10 +452,12 @@ function RecentInteractionsFeed({ data }: { data: { id: string; interaction_date
 }
 
 // ── Contact Detail Panel ──────────────────────────────────────────────────────
-function ContactDetailPanel({ contact, onClose, onUpdate }: { contact: Contact; onClose: () => void; onUpdate: (c: Contact) => void }) {
+function ContactDetailPanel({ contact, onClose, onUpdate, onDelete }: { contact: Contact; onClose: () => void; onUpdate: (c: Contact) => void; onDelete?: (id: string) => void }) {
   const [editMode, setEditMode] = useState(false)
   const [form, setForm] = useState({ ...contact })
   const [saving, setSaving] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deletingPanel, setDeletingPanel] = useState(false)
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { setForm({ ...contact }); setEditMode(false) }, [contact.id])
@@ -444,6 +489,17 @@ function ContactDetailPanel({ contact, onClose, onUpdate }: { contact: Contact; 
       setEditMode(false)
     }
     setSaving(false)
+  }
+
+  async function handlePanelDelete() {
+    setDeletingPanel(true)
+    const supabase = createClient()
+    const { error } = await supabase.from('contacts').delete().eq('id', contact.id)
+    if (!error) {
+      onDelete?.(contact.id)
+    }
+    setDeletingPanel(false)
+    setConfirmDelete(false)
   }
 
   const inp = 'w-full bg-[#111827] border border-[#374151] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-[#D4AF37] transition'
@@ -582,6 +638,26 @@ function ContactDetailPanel({ contact, onClose, onUpdate }: { contact: Contact; 
               )}
             </>
           )}
+
+          {/* Delete section */}
+          <div className="mt-8 pt-5 border-t border-[#374151]">
+            {confirmDelete ? (
+              <div className="flex items-center gap-3 bg-red-900/30 border border-red-700/50 rounded-lg px-4 py-3">
+                <span className="text-red-300 text-sm">Delete this contact permanently?</span>
+                <div className="ml-auto flex gap-2">
+                  <button onClick={() => setConfirmDelete(false)} className="px-3 py-1 text-xs text-gray-300 hover:text-white bg-[#374151] rounded-lg">Cancel</button>
+                  <button onClick={handlePanelDelete} disabled={deletingPanel} className="px-3 py-1 text-xs font-semibold text-white bg-red-600 hover:bg-red-500 rounded-lg disabled:opacity-50">
+                    {deletingPanel ? 'Deleting...' : 'Delete'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={() => setConfirmDelete(true)} className="flex items-center gap-2 text-sm text-red-400 hover:text-red-300 transition">
+                <Trash2 size={14} />
+                Delete Contact
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
