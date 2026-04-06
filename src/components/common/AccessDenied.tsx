@@ -7,7 +7,7 @@ interface AccessDeniedProps {
 }
 
 export function AccessDenied({
-  resource = 'this resource',
+  resource: _resource = 'this resource',
   message = "You don't have permission to access this resource.",
 }: AccessDeniedProps) {
   return (

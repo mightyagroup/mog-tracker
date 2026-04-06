@@ -563,7 +563,7 @@ export function LeadsTable({
       {/* Delete confirmation bar */}
       {pendingDeleteId && (
         <div className="mb-3 px-4 py-3 bg-red-900/30 border border-red-800/50 flex items-center justify-between rounded-lg">
-          <span className="text-red-300 text-sm">Archive "{leads.find(l => l.id === pendingDeleteId)?.title}"? It will be permanently deleted after 7 days.</span>
+          <span className="text-red-300 text-sm">Archive &quot;{leads.find(l => l.id === pendingDeleteId)?.title}&quot;? It will be permanently deleted after 7 days.</span>
           <div className="flex gap-2">
             <button onClick={() => setPendingDeleteId(null)} className="px-3 py-1 text-xs text-gray-400 hover:text-white">Cancel</button>
             <button

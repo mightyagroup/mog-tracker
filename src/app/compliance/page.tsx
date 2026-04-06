@@ -346,7 +346,7 @@ function RegistrationsTable({ records, onSelect, onDelete }: { records: Complian
     <div className="bg-[#1F2937] rounded-xl border border-[#374151] overflow-hidden">
       {pendingId && (
         <div className="px-4 py-3 bg-red-900/30 border-b border-red-800/50 flex items-center justify-between">
-          <span className="text-red-300 text-sm">Delete "{records.find(r => r.id === pendingId)?.name}"?</span>
+          <span className="text-red-300 text-sm">Delete &quot;{records.find(r => r.id === pendingId)?.name}&quot;?</span>
           <div className="flex gap-2">
             <button onClick={() => setPendingId(null)} className="px-3 py-1 text-xs text-gray-400 hover:text-white">Cancel</button>
             <button onClick={confirmDelete} className="px-3 py-1 text-xs font-semibold rounded bg-red-600 text-white">Delete</button>
@@ -417,7 +417,7 @@ function SubscriptionsTable({ records, onSelect, onDelete }: { records: Complian
     <div className="bg-[#1F2937] rounded-xl border border-[#374151] overflow-hidden">
       {pendingId && (
         <div className="px-4 py-3 bg-red-900/30 border-b border-red-800/50 flex items-center justify-between">
-          <span className="text-red-300 text-sm">Delete "{records.find(r => r.id === pendingId)?.name}"?</span>
+          <span className="text-red-300 text-sm">Delete &quot;{records.find(r => r.id === pendingId)?.name}&quot;?</span>
           <div className="flex gap-2">
             <button onClick={() => setPendingId(null)} className="px-3 py-1 text-xs text-gray-400 hover:text-white">Cancel</button>
             <button onClick={confirmDelete} className="px-3 py-1 text-xs font-semibold rounded bg-red-600 text-white">Delete</button>

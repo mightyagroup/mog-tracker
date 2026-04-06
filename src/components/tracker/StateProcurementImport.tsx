@@ -37,7 +37,7 @@ export interface StateProcurementImportProps {
 }
 
 export default function StateProcurementImport({
-  entity,
+  entity: _entity,
   onImportComplete,
 }: StateProcurementImportProps) {
   const [activeTab, setActiveTab] = useState<'eva' | 'emma'>('eva')
@@ -47,7 +47,6 @@ export default function StateProcurementImport({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [columnMapping, setColumnMapping] = useState<Record<string, string>>({})
   const [preview, setPreview] = useState(true)
 
   // ── Parse CSV from textarea ──────────────────────────────────────────────

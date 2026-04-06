@@ -1,6 +1,5 @@
 'use client'
 
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts'
 import { EntityType } from '@/lib/types'
 
 interface Category {
@@ -27,7 +26,6 @@ export function CategoryBreakdown({ data }: CategoryBreakdownProps) {
   // Group by entity then category
   const groupedData = data.reduce(
     (acc, item) => {
-      const key = `${item.entity}-${item.category}`
       acc.push({
         name: item.category,
         entity: item.entity,

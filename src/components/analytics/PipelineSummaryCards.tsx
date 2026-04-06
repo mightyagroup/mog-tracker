@@ -16,7 +16,7 @@ export function PipelineSummaryCards({
   activeBids,
   awards,
   pipelineValue,
-  selectedEntity = 'all',
+  selectedEntity: _selectedEntity = 'all',
 }: PipelineSummaryCardsProps) {
   const cards = [
     {

@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { Document } from '@/lib/types'
-import { createClient } from '@/lib/supabase/client'
 import { DocumentUpload } from './DocumentUpload'
 import { DocumentList } from './DocumentList'
 import { Plus, Loader2 } from 'lucide-react'

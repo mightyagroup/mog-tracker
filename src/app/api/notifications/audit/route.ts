@@ -1,7 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
-import type { EntityType, NotificationType } from '@/lib/types'
+import type { NotificationType } from '@/lib/types'
 
 const ENTITY_LABELS: Record<string, string> = {
   exousia: 'Exousia Solutions',

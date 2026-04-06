@@ -4,7 +4,8 @@ import { ENTITY_NAICS } from '@/lib/constants'
 import { calculateFitScore, autoCategorizeLead } from '@/lib/utils'
 import { EntityType, SetAsideType, ServiceCategory } from '@/lib/types'
 
-const ALL_NAICS = Array.from(new Set(Object.values(ENTITY_NAICS).flat()))
+// ALL_NAICS reserved for future eVA API integration
+// const ALL_NAICS = Array.from(new Set(Object.values(ENTITY_NAICS).flat()))
 
 // ── Set-aside code mapping ──────────────────────────────────────────────────
 function mapSetAside(code: string | null | undefined): string {
@@ -62,7 +63,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Failed to load service categories' }, { status: 500 })
   }
 
-  const typedCategories = categories as ServiceCategory[]
+  // typedCategories used only by POST handler
+  // const typedCategories = categories as ServiceCategory[]
 
   // ── For now, eVA integration is a placeholder ─────────────────────────────
   // eVA (https://eva.virginia.gov) does not have a reliable public API.
@@ -72,9 +74,9 @@ export async function GET(request: Request) {
   // 3. Support future integration if eVA releases an API
 
   const errorLog: string[] = []
-  let inserted = 0
-  let updated = 0
-  let skipped = 0
+  const inserted = 0
+  const updated = 0
+  const skipped = 0
 
   // For GET requests: return info about the feed and any recent leads
   const { data: recentEvaLeads } = await supabase

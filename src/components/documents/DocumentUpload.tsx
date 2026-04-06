@@ -108,7 +108,7 @@ export function DocumentUpload({
     setSuccess(false)
 
     try {
-      let uploadedCount = 0
+      let _uploadedCount = 0
 
       for (const file of files) {
         const formData = new FormData()
@@ -130,7 +130,7 @@ export function DocumentUpload({
           throw new Error(data.error || `Failed to upload ${file.name}`)
         }
 
-        uploadedCount++
+        _uploadedCount++
       }
 
       setSuccess(true)

@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { EntityType, LeadStatus, SourceType } from '@/lib/types'
-import { ENTITY_NAICS } from '@/lib/constants'
+// ENTITY_NAICS reserved for future pricing intelligence feature
 
 interface AnalyticsData {
   pipelinesSummary: {
@@ -50,7 +50,7 @@ interface AnalyticsData {
   }
 }
 
-export async function GET(request: Request) {
+export async function GET(_request: Request) {
   try {
     const cookieStore = await cookies()
     const supabase = createServerClient(

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Document, DocumentType } from '@/lib/types'
 import {
   FileText, Download, Trash2, File, FileSpreadsheet, FileImage, Loader2, AlertCircle,
