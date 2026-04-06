@@ -293,7 +293,8 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
 
   async function handleDelete() {
     const supabase = createClient()
-    await supabase.from('gov_leads').delete().eq('id', lead.id)
+    // Soft delete: set archived_at timestamp instead of hard delete
+    await supabase.from('gov_leads').update({ archived_at: new Date().toISOString() }).eq('id', lead.id)
     if (onDelete) {
       onDelete(lead.id)
     }
@@ -952,18 +953,18 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
           )}
         </div>
 
-        {/* Delete section at bottom of panel */}
-        <div className="border-t border-[#374151] px-6 py-4 mt-6 flex-shrink-0 bg-[#0f1419]">
+        {/* Archive/Delete section at bottom of panel */}
+        <div className="border-t border-[#374151] px-6 py-4 flex-shrink-0 bg-[#0f1419]">
           {confirmDelete ? (
             <div className="flex items-center justify-between">
-              <span className="text-red-300 text-sm">Delete this lead?</span>
+              <span className="text-red-300 text-sm">Archive this lead? It will be permanently deleted after 7 days.</span>
               <div className="flex gap-2">
                 <button onClick={() => setConfirmDelete(false)} className="px-3 py-1 text-xs text-gray-400 hover:text-white">Cancel</button>
-                <button onClick={handleDelete} className="px-3 py-1 text-xs font-semibold rounded bg-red-600 text-white">Delete</button>
+                <button onClick={handleDelete} className="px-3 py-1 text-xs font-semibold rounded bg-red-600 text-white hover:bg-red-700">Archive</button>
               </div>
             </div>
           ) : (
-            <button onClick={() => setConfirmDelete(true)} className="text-xs text-gray-600 hover:text-red-400 transition">Delete lead</button>
+            <button onClick={() => setConfirmDelete(true)} className="text-xs text-red-400 hover:text-red-300 transition">Delete lead</button>
           )}
         </div>
       </div>

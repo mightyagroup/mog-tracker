@@ -45,6 +45,7 @@ export async function GET(request: Request) {
       const { data: leads, error: leadsError } = await supabase
         .from('gov_leads')
         .select('id, entity, title, response_deadline, solicitation_number')
+        .is('archived_at', null)
         .not('response_deadline', 'is', null)
         .gt('response_deadline', new Date().toISOString())
         .limit(1000)

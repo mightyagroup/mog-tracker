@@ -41,7 +41,7 @@ export function CommercialLeadsTable({ presetStatuses, title, accentColor = '#06
   async function fetchLeads() {
     setLoading(true)
     const supabase = createClient()
-    let q = supabase.from('commercial_leads').select('*').eq('entity', ENTITY).order('fit_score', { ascending: false })
+    let q = supabase.from('commercial_leads').select('*').eq('entity', ENTITY).is('archived_at', null).order('fit_score', { ascending: false })
     if (presetStatuses?.length) q = q.in('status', presetStatuses)
     const { data } = await q
     setLeads((data ?? []) as CommercialLead[])

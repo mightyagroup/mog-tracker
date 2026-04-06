@@ -217,7 +217,8 @@ export function CommercialDetailPanel({
 
   async function handleDelete() {
     const supabase = createClient()
-    await supabase.from('commercial_leads').delete().eq('id', lead.id)
+    // Soft delete: set archived_at timestamp instead of hard delete
+    await supabase.from('commercial_leads').update({ archived_at: new Date().toISOString() }).eq('id', lead.id)
     onDelete?.(lead.id)
     onClose()
   }
@@ -495,18 +496,18 @@ export function CommercialDetailPanel({
         </div>
       </div>
 
-      {/* Delete */}
+      {/* Archive/Delete */}
       <div className="px-6 py-4 border-t border-[#374151] flex-shrink-0">
         {confirmDelete ? (
           <div className="flex items-center justify-between">
-            <span className="text-gray-400 text-xs">Delete this lead?</span>
+            <span className="text-red-300 text-xs">Archive this lead? It will be permanently deleted after 7 days.</span>
             <div className="flex gap-2">
               <button onClick={() => setConfirmDelete(false)} className="px-3 py-1 text-xs text-gray-400 hover:text-white">Cancel</button>
-              <button onClick={handleDelete} className="px-3 py-1 text-xs font-semibold rounded bg-red-600 text-white">Delete</button>
+              <button onClick={handleDelete} className="px-3 py-1 text-xs font-semibold rounded bg-red-600 text-white hover:bg-red-700">Archive</button>
             </div>
           </div>
         ) : (
-          <button onClick={() => setConfirmDelete(true)} className="text-xs text-gray-600 hover:text-red-400 transition">Delete lead</button>
+          <button onClick={() => setConfirmDelete(true)} className="text-xs text-red-400 hover:text-red-300 transition">Delete lead</button>
         )}
       </div>
     </div>

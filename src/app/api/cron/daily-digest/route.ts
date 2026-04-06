@@ -46,6 +46,7 @@ export async function GET(request: Request) {
         const { data: newLeads, error: newLeadsError } = await supabase
           .from('gov_leads')
           .select('id, title, entity, solicitation_number')
+          .is('archived_at', null)
           .gte('created_at', yesterday.toISOString())
           .lt('created_at', new Date().toISOString())
           .limit(10)
@@ -61,6 +62,7 @@ export async function GET(request: Request) {
       const { data: upcomingLeads, error: upcomingError } = await supabase
         .from('gov_leads')
         .select('id, title, response_deadline')
+        .is('archived_at', null)
         .not('response_deadline', 'is', null)
         .gte('response_deadline', new Date().toISOString())
         .lt('response_deadline', subDays(new Date(), -7).toISOString())

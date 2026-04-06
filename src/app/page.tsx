@@ -37,9 +37,9 @@ export default async function CommandCenterPage() {
   const now = new Date()
 
   const [exousiaRes, vitalxRes, ironhouseRes, interactionsRes, contactsRes, complianceRes, categoriesRes] = await Promise.all([
-    supabase.from('gov_leads').select('id, status, estimated_value, response_deadline, title, entity, source, service_category_id, solicitation_number, amendment_count, last_amendment_date').eq('entity', 'exousia'),
-    supabase.from('gov_leads').select('id, status, estimated_value, response_deadline, title, entity, source, service_category_id, solicitation_number, amendment_count, last_amendment_date').eq('entity', 'vitalx'),
-    supabase.from('gov_leads').select('id, status, estimated_value, response_deadline, title, entity, source, service_category_id, solicitation_number, amendment_count, last_amendment_date').eq('entity', 'ironhouse'),
+    supabase.from('gov_leads').select('id, status, estimated_value, response_deadline, title, entity, source, service_category_id, solicitation_number, amendment_count, last_amendment_date').eq('entity', 'exousia').is('archived_at', null),
+    supabase.from('gov_leads').select('id, status, estimated_value, response_deadline, title, entity, source, service_category_id, solicitation_number, amendment_count, last_amendment_date').eq('entity', 'vitalx').is('archived_at', null),
+    supabase.from('gov_leads').select('id, status, estimated_value, response_deadline, title, entity, source, service_category_id, solicitation_number, amendment_count, last_amendment_date').eq('entity', 'ironhouse').is('archived_at', null),
     supabase.from('interactions').select('id, interaction_date, interaction_type, subject, notes, entity').order('created_at', { ascending: false }).limit(10),
     supabase.from('contacts').select('id', { count: 'exact', head: true }),
     supabase.from('compliance_records').select('id, name, entity, record_type, expiration_date, cancellation_deadline, monthly_cost'),
@@ -63,11 +63,13 @@ export default async function CommandCenterPage() {
   const recentLeads = await supabase
     .from('gov_leads')
     .select('id, title, status, entity, updated_at')
+    .is('archived_at', null)
     .order('updated_at', { ascending: false })
     .limit(5)
   const recentComm = await supabase
     .from('commercial_leads')
     .select('id, organization_name, status, entity, updated_at')
+    .is('archived_at', null)
     .order('updated_at', { ascending: false })
     .limit(5)
 

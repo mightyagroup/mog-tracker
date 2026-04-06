@@ -88,15 +88,15 @@ export async function GET(request: Request) {
       supabase
         .from('gov_leads')
         .select('id, status, estimated_value, service_category_id, source, response_deadline, created_at, awarded_date, agency')
-        .eq('entity', 'exousia'),
+        .eq('entity', 'exousia').is('archived_at', null),
       supabase
         .from('gov_leads')
         .select('id, status, estimated_value, service_category_id, source, response_deadline, created_at, awarded_date, agency')
-        .eq('entity', 'vitalx'),
+        .eq('entity', 'vitalx').is('archived_at', null),
       supabase
         .from('gov_leads')
         .select('id, status, estimated_value, service_category_id, source, response_deadline, created_at, awarded_date, agency')
-        .eq('entity', 'ironhouse'),
+        .eq('entity', 'ironhouse').is('archived_at', null),
     ])
 
     const allGovLeads = [
@@ -323,7 +323,7 @@ export async function GET(request: Request) {
     const commercialRes = await supabase
       .from('commercial_leads')
       .select('id, status, estimated_annual_value, contract_value')
-      .eq('entity', 'vitalx')
+      .eq('entity', 'vitalx').is('archived_at', null)
 
     const commercialLeads = commercialRes.data ?? []
     const commercialPipeline = {
