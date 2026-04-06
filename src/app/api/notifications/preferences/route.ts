@@ -44,7 +44,7 @@ export async function PUT(request: NextRequest) {
     const body = await request.json()
 
     // Get existing preferences or create if not exist
-    const { data: _existing, error: fetchError } = await supabase
+    const { error: fetchError } = await supabase
       .rpc('get_or_create_notification_preferences', { p_user_id: user.id })
 
     if (fetchError) {
