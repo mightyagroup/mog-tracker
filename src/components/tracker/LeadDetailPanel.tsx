@@ -531,7 +531,7 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                   ) : (
                     <div className="flex items-start gap-4 p-3 bg-[#111827] rounded-lg border border-[#374151]">
                       <div className="flex-1 min-w-0">
-                        <div className="text-white text-sm font-medium">{lead.contracting_officer_name ?? '—'}</div>
+                        <div className="text-white text-sm font-medium">{lead.contracting_officer_name ?? 'â'}</div>
                         {lead.contracting_officer_email && (
                           <a href={`mailto:${lead.contracting_officer_email}`} className="text-xs hover:underline mt-0.5 block" style={{ color: accentColor }}>
                             {lead.contracting_officer_email}
@@ -564,7 +564,7 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                   <div>
                     <label className={labelCls}>Service Category</label>
                     <select className={selectCls} value={form.service_category_id ?? ''} onChange={e => setForm(f => ({ ...f, service_category_id: e.target.value }))}>
-                      <option value="">— None —</option>
+                      <option value="">â None â</option>
                       {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   </div>
@@ -586,7 +586,7 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <div className={labelCls}>Posted</div>
-                    <div className="text-gray-200 text-sm">{lead.posted_date ? format(parseISO(lead.posted_date), 'MMM d, yyyy') : '—'}</div>
+                    <div className="text-gray-200 text-sm">{lead.posted_date ? format(parseISO(lead.posted_date), 'MMM d, yyyy') : 'â'}</div>
                   </div>
                   <div>
                     <div className={labelCls}>Deadline</div>
@@ -594,7 +594,7 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                   </div>
                   <div>
                     <div className={labelCls}>Archive</div>
-                    <div className="text-gray-200 text-sm">{lead.archive_date ? format(parseISO(lead.archive_date), 'MMM d, yyyy') : '—'}</div>
+                    <div className="text-gray-200 text-sm">{lead.archive_date ? format(parseISO(lead.archive_date), 'MMM d, yyyy') : 'â'}</div>
                   </div>
                 </div>
               </div>
@@ -625,7 +625,7 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                       className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition disabled:opacity-50"
                     >
                       <RefreshCw size={12} className={usaLoading ? 'animate-spin' : ''} />
-                      {usaLoading ? 'Looking up…' : 'Refresh'}
+                      {usaLoading ? 'Looking upâ¦' : 'Refresh'}
                     </button>
                   </div>
                 </div>
@@ -634,8 +634,8 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                 {usaData && !usaLoading && (
                   <div className={`mb-3 px-3 py-2 rounded-lg text-xs border ${usaData.found ? 'bg-[#052e16] border-green-900 text-green-300' : 'bg-[#1F2937] border-[#374151] text-gray-500'}`}>
                     {usaData.found
-                      ? `✓ Prior award data found on USASpending.gov (Matched by: ${usaData.usaspending_match_method ?? 'N/A'}, Confidence: ${usaData.usaspending_confidence ?? 'N/A'})`
-                      : 'No prior award data found on USASpending.gov — enter manually.'}
+                      ? `â Prior award data found on USASpending.gov (Matched by: ${usaData.usaspending_match_method ?? 'N/A'}, Confidence: ${usaData.usaspending_confidence ?? 'N/A'})`
+                      : 'No prior award data found on USASpending.gov â enter manually.'}
                   </div>
                 )}
 
@@ -657,11 +657,11 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                   <div className="grid grid-cols-2 gap-3 mb-3 p-3 bg-[#111827] rounded-lg border border-[#374151]">
                     <div>
                       <div className="text-gray-500 text-xs mb-0.5">Previous Award Total</div>
-                      <div className="text-white font-bold text-sm">{formatFullCurrency(form.previous_award_total ?? lead.previous_award_total) ?? '—'}</div>
+                      <div className="text-white font-bold text-sm">{formatFullCurrency(form.previous_award_total ?? lead.previous_award_total) ?? 'â'}</div>
                     </div>
                     <div>
                       <div className="text-gray-500 text-xs mb-0.5">Incumbent Contractor</div>
-                      <div className="text-white text-sm font-medium">{form.incumbent_contractor ?? lead.incumbent_contractor ?? '—'}</div>
+                      <div className="text-white text-sm font-medium">{form.incumbent_contractor ?? lead.incumbent_contractor ?? 'â'}</div>
                     </div>
                   </div>
                 )}
@@ -869,6 +869,21 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
 
           {activeSection === 'compliance' && (
             <div className="p-6">
+              {lead.status === 'active_bid' && (
+                <div className="mb-4 bg-[#111827] border border-[#374151] rounded-lg p-4 flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-white">Proposal platform</div>
+                    <div className="text-xs text-gray-400">Open the full proposal workflow: intake, validation, compliance, pricing, pink team, submit.</div>
+                  </div>
+                  <a
+                    href={'/proposals/new?lead_id=' + lead.id + '&entity=' + entity}
+                    className="px-3 py-2 rounded text-sm font-semibold text-[#111827]"
+                    style={{ backgroundColor: accentColor }}
+                  >
+                    Open proposal →
+                  </a>
+                </div>
+              )}
               {lead.status !== 'active_bid' && complianceItems.length === 0 ? (
                 <div className="text-center py-12">
                   <p className="text-gray-400 text-sm">Move this lead to <strong className="text-green-400">Active Bid</strong> to auto-generate the compliance checklist.</p>
@@ -979,7 +994,7 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                             <span className="text-[10px] uppercase tracking-wider font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">Doc Sync</span>
                           )}
                           {!isAmendment && !isDocSync && i.interaction_type && i.interaction_type !== 'note' && (
-                            <span className="text-xs text-gray-500 capitalize">· {i.interaction_type.replace('_', ' ')}</span>
+                            <span className="text-xs text-gray-500 capitalize">Â· {i.interaction_type.replace('_', ' ')}</span>
                           )}
                         </div>
                         {i.subject && i.subject !== 'Note' && (
@@ -1016,7 +1031,7 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
   )
 }
 
-// ── Status dropdown (inline in header) ──────────────────────────────────────
+// ââ Status dropdown (inline in header) ââââââââââââââââââââââââââââââââââââââ
 function StatusDropdown({ status, onChange }: { status: LeadStatus; onChange: (s: LeadStatus) => void }) {
   const [open, setOpen] = useState(false)
   return (
@@ -1042,7 +1057,7 @@ function StatusDropdown({ status, onChange }: { status: LeadStatus; onChange: (s
   )
 }
 
-// ── Small helpers ─────────────────────────────────────────────────────────────
+// ââ Small helpers âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function EditableField({ label, value, editMode, onChange, type = 'text' }: {
   label: string; value?: string | null; editMode: boolean
   onChange: (v: string) => void; type?: string
@@ -1058,14 +1073,14 @@ function EditableField({ label, value, editMode, onChange, type = 'text' }: {
           onChange={e => onChange(e.target.value)}
         />
       ) : (
-        <div className="text-gray-200 text-sm">{value || '—'}</div>
+        <div className="text-gray-200 text-sm">{value || 'â'}</div>
       )}
     </div>
   )
 }
 
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
-  if (!value || value === '—') return null
+  if (!value || value === 'â') return null
   return (
     <div>
       <div className={labelCls}>{label}</div>
@@ -1091,7 +1106,7 @@ function SuggestedSubCard({
             <span key={r} className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: accentColor + '22', color: accentColor }}>{r}</span>
           ))}
           {sub.sub_type === 'teaming_partner' && sub.teaming_agreement_status === 'executed' && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-[#052e16] text-green-400">teaming ✓</span>
+            <span className="text-xs px-1.5 py-0.5 rounded bg-[#052e16] text-green-400">teaming â</span>
           )}
         </div>
       </div>
