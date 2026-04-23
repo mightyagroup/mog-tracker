@@ -19,7 +19,7 @@ function heading(text: string, level: typeof HeadingLevel.HEADING_1 = HeadingLev
   return new Paragraph({ text, heading: level, spacing: { before: 200, after: 100 } })
 }
 
-function body(text: string): Paragraph {
+function bodyPara(text: string): Paragraph {
   return new Paragraph({ children: [new TextRun({ text, size: 22 })], spacing: { after: 120 } })
 }
 
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
     // Executive summary section
     const exec: Paragraph[] = [
       heading('1. Executive Summary'),
-      body(
+      bodyPara(
         entity.toUpperCase() +
         ' respectfully submits this proposal for ' +
         (s(gl.title) || 'the referenced opportunity') +
@@ -111,10 +111,10 @@ export async function POST(req: NextRequest) {
     if (narr) {
       for (const para of narr.split('\n\n')) {
         const clean = para.trim()
-        if (clean) tech.push(body(clean))
+        if (clean) tech.push(bodyPara(clean))
       }
     } else {
-      tech.push(body('[Technical narrative not yet drafted. Edit on the Validate page before regenerating.]'))
+      tech.push(bodyPara('[Technical narrative not yet drafted. Edit on the Validate page before regenerating.]'))
     }
 
     // Compliance matrix as a table
@@ -153,7 +153,7 @@ export async function POST(req: NextRequest) {
     const clins = (pd.clins as Bag[]) || []
     let pricingTable: Table | null = null
     if (clins.length > 0) {
-      pricing.push(body('Total evaluated price: $' + n(p.pricing_total).toLocaleString()))
+      pricing.push(bodyPara('Total evaluated price: $' + n(p.pricing_total).toLocaleString()))
       pricingTable = new Table({
         width: { size: 100, type: WidthType.PERCENTAGE },
         rows: [
@@ -178,14 +178,14 @@ export async function POST(req: NextRequest) {
         ],
       })
     } else {
-      pricing.push(body('[Pricing not yet saved. Edit on the Pricing page before regenerating.]'))
+      pricing.push(bodyPara('[Pricing not yet saved. Edit on the Pricing page before regenerating.]'))
     }
 
     // Signature / address block
     const signature: Paragraph[] = [
       new Paragraph({ children: [new PageBreak()] }),
       heading('5. Signature and Authorized Representative'),
-      body('This proposal is submitted on behalf of ' + entity.toUpperCase() + '.'),
+      bodyPara('This proposal is submitted on behalf of ' + entity.toUpperCase() + '.'),
       new Paragraph({ children: [new TextRun({ text: ' ' })] }),
       kv('Address', contactAddress.line1),
       kv('City, State ZIP', contactAddress.city + ', ' + contactAddress.state + ' ' + contactAddress.zip),
