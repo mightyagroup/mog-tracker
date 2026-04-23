@@ -3,10 +3,12 @@
 // /proposals/new?lead_id=X&entity=Y — creates (or finds) a proposal and redirects to intake.
 // This is the bridge from gov_leads to the proposal platform.
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
-export default function NewProposalBridge() {
+export const dynamic = 'force-dynamic'
+
+function Bridge() {
   const router = useRouter()
   const params = useSearchParams()
   const [error, setError] = useState<string | null>(null)
@@ -52,5 +54,13 @@ export default function NewProposalBridge() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function NewProposalBridge() {
+  return (
+    <Suspense fallback={<div className="px-8 py-12 min-h-screen bg-[#111827] text-white">Loading…</div>}>
+      <Bridge />
+    </Suspense>
   )
 }
