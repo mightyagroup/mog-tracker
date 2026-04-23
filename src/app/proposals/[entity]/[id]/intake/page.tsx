@@ -1,11 +1,11 @@
 'use client'
 
-// Intake wizard — 10 required fields gated before progressing to drafting.
+// Intake wizard — required fields gated before progressing to drafting.
 // No skipping. Every proposal must complete intake or sit in "intake" status.
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
 type Intake = {
@@ -55,9 +55,13 @@ const PRICING_FORMATS = [
   'sf1449_clins', 'attachment_b_pricing_sheet', 'narrative_with_totals', 'custom_template', 'hourly_rates_labor_cats',
 ]
 
+type Bag = Record<string, unknown>
+const s = (v: unknown): string => (typeof v === 'string' ? v : '')
+const b = (v: unknown): boolean => Boolean(v)
+const n = (v: unknown, d: number): number => (typeof v === 'number' ? v : d)
+
 export default function IntakePage() {
   const params = useParams<{ entity: string; id: string }>()
-  const router = useRouter()
   const entity = params?.entity as string
   const proposalId = params?.id as string
 
@@ -85,31 +89,30 @@ export default function IntakePage() {
         .single()
       if (cancelled) return
       if (error) { setError(error.message); setLoading(false); return }
-      // Seed intake from gov_leads if proposal intake fields empty
-      const gl = (data as any).gov_leads || {}
-      setForm(prev => ({
-        ...prev,
-        solicitation_number: data.solicitation_number || gl.solicitation_number || '',
-        agency: data.agency || gl.agency || '',
-        submission_deadline: data.submission_deadline || gl.response_deadline || '',
-        submission_method: data.submission_method || '',
-        submission_portal_url: data.submission_portal_url || '',
-        naics_code: data.naics_code || gl.naics_code || '',
-        set_aside: data.set_aside || gl.set_aside || 'none',
-        place_of_performance: data.place_of_performance || gl.place_of_performance || '',
-        contracting_officer_name: data.contracting_officer_name || '',
-        contracting_officer_email: data.contracting_officer_email || '',
-        incumbent_contractor: data.incumbent_contractor || '',
-        period_of_performance: data.period_of_performance || '',
-        page_limit: data.page_limit || '',
-        font_requirement: data.font_requirement || '',
-        evaluation_factors: data.evaluation_factors || '',
-        technical_volume_required: Boolean(data.technical_volume_required),
-        past_performance_count: data.past_performance_count ?? 3,
-        pricing_format: data.pricing_format || '',
-        assigned_va: data.assigned_va || '',
-      }))
-      setIntakeComplete(Boolean(data.intake_complete))
+      const d = (data as unknown) as Bag
+      const gl = ((d.gov_leads as Bag) || {}) as Bag
+      setForm({
+        solicitation_number: s(d.solicitation_number) || s(gl.solicitation_number),
+        agency: s(d.agency) || s(gl.agency),
+        submission_deadline: s(d.submission_deadline) || s(gl.response_deadline),
+        submission_method: s(d.submission_method),
+        submission_portal_url: s(d.submission_portal_url),
+        naics_code: s(d.naics_code) || s(gl.naics_code),
+        set_aside: s(d.set_aside) || s(gl.set_aside) || 'none',
+        place_of_performance: s(d.place_of_performance) || s(gl.place_of_performance),
+        contracting_officer_name: s(d.contracting_officer_name),
+        contracting_officer_email: s(d.contracting_officer_email),
+        incumbent_contractor: s(d.incumbent_contractor),
+        period_of_performance: s(d.period_of_performance),
+        page_limit: s(d.page_limit),
+        font_requirement: s(d.font_requirement),
+        evaluation_factors: s(d.evaluation_factors),
+        technical_volume_required: b(d.technical_volume_required),
+        past_performance_count: n(d.past_performance_count, 3),
+        pricing_format: s(d.pricing_format),
+        assigned_va: s(d.assigned_va),
+      })
+      setIntakeComplete(b(d.intake_complete))
       setLoading(false)
     })()
     return () => { cancelled = true }
@@ -129,18 +132,20 @@ export default function IntakePage() {
   async function save(markComplete: boolean) {
     setSaving(true); setError(null); setMsg(null)
     const supa = createClient()
-    const payload: any = { ...form }
-    if (markComplete) payload.intake_complete = true
-    if (markComplete && payload.status === 'intake') payload.status = 'drafting'
+    const payload: Record<string, unknown> = { ...form }
+    if (markComplete) {
+      payload.intake_complete = true
+      payload.status = 'drafting'
+    }
     const { error } = await supa.from('proposals').update(payload).eq('id', proposalId)
     setSaving(false)
     if (error) { setError(error.message); return }
-    setMsg(markComplete ? 'Intake complete — proposal moved to drafting.' : 'Saved.')
+    setMsg(markComplete ? 'Intake complete. Proposal moved to drafting.' : 'Saved.')
     if (markComplete) setIntakeComplete(true)
   }
 
-  const input = "w-full bg-[#111827] border border-[#374151] rounded px-3 py-2 text-sm text-white"
-  const label = "block text-xs uppercase tracking-wider text-gray-400 mb-1"
+  const inputCls = "w-full bg-[#111827] border border-[#374151] rounded px-3 py-2 text-sm text-white"
+  const labelCls = "block text-xs uppercase tracking-wider text-gray-400 mb-1"
 
   if (loading) return <div className="px-8 py-6 text-white">Loading intake…</div>
 
@@ -167,98 +172,98 @@ export default function IntakePage() {
         <div className="lg:col-span-2 bg-[#1F2937] border border-[#374151] rounded-xl p-5 space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={label}>Solicitation Number *</label>
-              <input className={input} value={form.solicitation_number} onChange={e => setForm({ ...form, solicitation_number: e.target.value })} />
+              <label className={labelCls}>Solicitation Number *</label>
+              <input className={inputCls} value={form.solicitation_number} onChange={e => setForm({ ...form, solicitation_number: e.target.value })} />
             </div>
             <div>
-              <label className={label}>Agency *</label>
-              <input className={input} value={form.agency} onChange={e => setForm({ ...form, agency: e.target.value })} />
+              <label className={labelCls}>Agency *</label>
+              <input className={inputCls} value={form.agency} onChange={e => setForm({ ...form, agency: e.target.value })} />
             </div>
             <div>
-              <label className={label}>Submission Deadline *</label>
-              <input type="datetime-local" className={input} value={form.submission_deadline?.slice(0, 16) || ''} onChange={e => setForm({ ...form, submission_deadline: e.target.value })} />
+              <label className={labelCls}>Submission Deadline *</label>
+              <input type="datetime-local" className={inputCls} value={form.submission_deadline?.slice(0, 16) || ''} onChange={e => setForm({ ...form, submission_deadline: e.target.value })} />
             </div>
             <div>
-              <label className={label}>Submission Method *</label>
-              <select className={input} value={form.submission_method} onChange={e => setForm({ ...form, submission_method: e.target.value })}>
+              <label className={labelCls}>Submission Method *</label>
+              <select className={inputCls} value={form.submission_method} onChange={e => setForm({ ...form, submission_method: e.target.value })}>
                 <option value="">Select…</option>
                 {SUBMISSION_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
             </div>
             <div className="col-span-2">
-              <label className={label}>Submission Portal / URL</label>
-              <input className={input} value={form.submission_portal_url} onChange={e => setForm({ ...form, submission_portal_url: e.target.value })} placeholder="https://sam.gov/… or email address" />
+              <label className={labelCls}>Submission Portal / URL</label>
+              <input className={inputCls} value={form.submission_portal_url} onChange={e => setForm({ ...form, submission_portal_url: e.target.value })} placeholder="https://sam.gov/… or email address" />
             </div>
             <div>
-              <label className={label}>NAICS Code *</label>
-              <input className={input} value={form.naics_code} onChange={e => setForm({ ...form, naics_code: e.target.value })} placeholder="e.g. 561720" />
+              <label className={labelCls}>NAICS Code *</label>
+              <input className={inputCls} value={form.naics_code} onChange={e => setForm({ ...form, naics_code: e.target.value })} placeholder="e.g. 561720" />
             </div>
             <div>
-              <label className={label}>Set-Aside *</label>
-              <select className={input} value={form.set_aside} onChange={e => setForm({ ...form, set_aside: e.target.value })}>
-                {SET_ASIDES.map(s => <option key={s} value={s}>{s}</option>)}
+              <label className={labelCls}>Set-Aside *</label>
+              <select className={inputCls} value={form.set_aside} onChange={e => setForm({ ...form, set_aside: e.target.value })}>
+                {SET_ASIDES.map(x => <option key={x} value={x}>{x}</option>)}
               </select>
             </div>
             <div className="col-span-2">
-              <label className={label}>Place of Performance *</label>
-              <input className={input} value={form.place_of_performance} onChange={e => setForm({ ...form, place_of_performance: e.target.value })} placeholder="City, State" />
+              <label className={labelCls}>Place of Performance *</label>
+              <input className={inputCls} value={form.place_of_performance} onChange={e => setForm({ ...form, place_of_performance: e.target.value })} placeholder="City, State" />
             </div>
             <div>
-              <label className={label}>Contracting Officer Name</label>
-              <input className={input} value={form.contracting_officer_name} onChange={e => setForm({ ...form, contracting_officer_name: e.target.value })} />
+              <label className={labelCls}>Contracting Officer Name</label>
+              <input className={inputCls} value={form.contracting_officer_name} onChange={e => setForm({ ...form, contracting_officer_name: e.target.value })} />
             </div>
             <div>
-              <label className={label}>CO Email *</label>
-              <input type="email" className={input} value={form.contracting_officer_email} onChange={e => setForm({ ...form, contracting_officer_email: e.target.value })} />
+              <label className={labelCls}>CO Email *</label>
+              <input type="email" className={inputCls} value={form.contracting_officer_email} onChange={e => setForm({ ...form, contracting_officer_email: e.target.value })} />
             </div>
             <div>
-              <label className={label}>Incumbent Contractor</label>
-              <input className={input} value={form.incumbent_contractor} onChange={e => setForm({ ...form, incumbent_contractor: e.target.value })} />
+              <label className={labelCls}>Incumbent Contractor</label>
+              <input className={inputCls} value={form.incumbent_contractor} onChange={e => setForm({ ...form, incumbent_contractor: e.target.value })} />
             </div>
             <div>
-              <label className={label}>Period of Performance</label>
-              <input className={input} value={form.period_of_performance} onChange={e => setForm({ ...form, period_of_performance: e.target.value })} placeholder="e.g. 12mo base + 4 option years" />
+              <label className={labelCls}>Period of Performance</label>
+              <input className={inputCls} value={form.period_of_performance} onChange={e => setForm({ ...form, period_of_performance: e.target.value })} placeholder="e.g. 12mo base + 4 option years" />
             </div>
             <div>
-              <label className={label}>Page Limit</label>
-              <input className={input} value={form.page_limit} onChange={e => setForm({ ...form, page_limit: e.target.value })} placeholder="e.g. 25 pages technical" />
+              <label className={labelCls}>Page Limit</label>
+              <input className={inputCls} value={form.page_limit} onChange={e => setForm({ ...form, page_limit: e.target.value })} placeholder="e.g. 25 pages technical" />
             </div>
             <div>
-              <label className={label}>Font Requirement</label>
-              <input className={input} value={form.font_requirement} onChange={e => setForm({ ...form, font_requirement: e.target.value })} placeholder="e.g. Times New Roman 12pt" />
+              <label className={labelCls}>Font Requirement</label>
+              <input className={inputCls} value={form.font_requirement} onChange={e => setForm({ ...form, font_requirement: e.target.value })} placeholder="e.g. Times New Roman 12pt" />
             </div>
             <div className="col-span-2">
-              <label className={label}>Evaluation Factors (Section M) *</label>
-              <textarea className={input} rows={3} value={form.evaluation_factors} onChange={e => setForm({ ...form, evaluation_factors: e.target.value })} placeholder="e.g. LPTA, Best Value Trade-off, weighted factors…" />
+              <label className={labelCls}>Evaluation Factors (Section M) *</label>
+              <textarea className={inputCls} rows={3} value={form.evaluation_factors} onChange={e => setForm({ ...form, evaluation_factors: e.target.value })} placeholder="e.g. LPTA, Best Value Trade-off, weighted factors…" />
             </div>
             <div>
-              <label className={label}>Pricing Format *</label>
-              <select className={input} value={form.pricing_format} onChange={e => setForm({ ...form, pricing_format: e.target.value })}>
+              <label className={labelCls}>Pricing Format *</label>
+              <select className={inputCls} value={form.pricing_format} onChange={e => setForm({ ...form, pricing_format: e.target.value })}>
                 <option value="">Select…</option>
                 {PRICING_FORMATS.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
             <div>
-              <label className={label}>Past Performance Count</label>
-              <input type="number" min={0} max={10} className={input} value={form.past_performance_count} onChange={e => setForm({ ...form, past_performance_count: Number(e.target.value) })} />
+              <label className={labelCls}>Past Performance Count</label>
+              <input type="number" min={0} max={10} className={inputCls} value={form.past_performance_count} onChange={e => setForm({ ...form, past_performance_count: Number(e.target.value) })} />
             </div>
             <div>
-              <label className={label}>Technical Volume Required</label>
+              <label className={labelCls}>Technical Volume Required</label>
               <div className="flex items-center gap-3 mt-2">
                 <input type="checkbox" checked={form.technical_volume_required} onChange={e => setForm({ ...form, technical_volume_required: e.target.checked })} />
                 <span className="text-sm text-gray-300">Separate technical volume</span>
               </div>
             </div>
             <div>
-              <label className={label}>Assigned VA</label>
-              <input className={input} value={form.assigned_va} onChange={e => setForm({ ...form, assigned_va: e.target.value })} placeholder="email or initials" />
+              <label className={labelCls}>Assigned VA</label>
+              <input className={inputCls} value={form.assigned_va} onChange={e => setForm({ ...form, assigned_va: e.target.value })} placeholder="email or initials" />
             </div>
           </div>
 
           <div className="flex gap-3 pt-4 border-t border-[#374151]">
             <button disabled={saving} onClick={() => save(false)} className="px-4 py-2 rounded bg-[#374151] text-white text-sm disabled:opacity-50">Save draft</button>
             <button disabled={saving || !canComplete} onClick={() => save(true)} className="px-4 py-2 rounded bg-[#D4AF37] text-[#111827] text-sm font-semibold disabled:opacity-50">
-              {intakeComplete ? 'Save changes' : 'Complete intake → move to drafting'}
+              {intakeComplete ? 'Save changes' : 'Complete intake'}
             </button>
           </div>
         </div>

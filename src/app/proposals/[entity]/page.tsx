@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
 type EntitySlug = 'exousia' | 'vitalx' | 'ironhouse'
@@ -55,12 +55,10 @@ function urgencyColor(iso: string | null): string {
 
 export default function EntityProposalHub() {
   const params = useParams<{ entity: string }>()
-  const router = useRouter()
   const entity = (params?.entity || '') as EntitySlug
   const meta = ENTITY_META[entity]
   const [rows, setRows] = useState<ProposalRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [creating, setCreating] = useState(false)
 
   useEffect(() => {
     if (!meta) return

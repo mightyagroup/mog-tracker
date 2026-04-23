@@ -70,7 +70,7 @@ export default function ValidatePage() {
       if (cancelled) return
       if (data) {
         setProposal(data as unknown as ProposalLite)
-        setNarrative((data as any).narrative_draft || '')
+        setNarrative(((data as unknown) as { narrative_draft?: string }).narrative_draft || '')
       }
       // Load last validation from proposal_reviews
       const { data: reviews } = await supa.from('proposal_reviews')
