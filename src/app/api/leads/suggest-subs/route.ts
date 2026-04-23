@@ -74,7 +74,7 @@ export async function POST(request: Request) {
     }
 
     // Geographic match
-    if (placeLower && s.geographic_coverage && placeLower.split(/[,\s]+/).some(token => !!token && s.geographic_coverage!.toLowerCase().includes(token))) {
+    if (placeLower && s.geographic_coverage && placeLower.split(/[,\s]+/).some((token: string) => !!token && s.geographic_coverage!.toLowerCase().includes(token))) {
       score += 10
       reasons.push('geographic fit (' + s.geographic_coverage + ')')
     }
@@ -101,7 +101,7 @@ export async function POST(request: Request) {
     id: r.sub.id,
     company_name: r.sub.company_name,
     score: r.score,
-    rationale: r.reasons.join(' · '),
+    rationale: r.reasons.join(' Â· '),
     certifications: r.sub.certifications || [],
     teaming_agreement_status: r.sub.teaming_agreement_status,
   }))
