@@ -81,12 +81,12 @@ export function PipelineTrendChart() {
   }, [rows])
 
   if (error) return <div className="text-red-400 text-sm">Pipeline chart error: {error}</div>
-  if (!rows) return <div className="text-gray-400 text-sm">Loading pipeline…</div>
+  if (!rows) return <div className="text-gray-400 text-sm">Loading pipelineâ¦</div>
   if (rows.length === 0) return <div className="text-gray-400 text-sm">No pipeline data in last 90 days yet.</div>
 
   return (
     <div className="w-full h-80 bg-[#1F2937] rounded-xl border border-[#374151] p-4">
-      <div className="text-white font-semibold mb-2">Pipeline value — last 90 days</div>
+      <div className="text-white font-semibold mb-2">Pipeline value â last 90 days</div>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 10, right: 20, bottom: 30, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -94,7 +94,7 @@ export function PipelineTrendChart() {
           <YAxis tick={{ fill: '#9CA3AF', fontSize: 11 }} tickFormatter={fmtAxisCurrency} />
           <Tooltip
             contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8, color: '#fff' }}
-            formatter={(v: number) => fmtTooltipCurrency(v)}
+            formatter={(v: unknown) => fmtTooltipCurrency(Number(v))}
           />
           <Legend wrapperStyle={{ paddingTop: 8, color: '#fff' }} />
           <Line type="monotone" dataKey="total"     stroke="#D4AF37" strokeWidth={2} dot={false} name="Total" />
