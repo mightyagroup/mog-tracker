@@ -104,10 +104,11 @@ export async function requireEntityAccess(
 }
 
 /**
- * Require edit permissions (admin or manager) - throws AuthorizationError if viewer
+ * Require edit permissions - admin, manager, or va_entity (read/write on their entities).
+ * viewer and va_readonly are blocked.
  */
 export async function requireEditAccess(supabase: SupabaseClient): Promise<UserProfile> {
-  return requireRole(supabase, ['admin', 'manager'])
+  return requireRole(supabase, ['admin', 'manager', 'va_entity'])
 }
 
 /**
@@ -123,14 +124,14 @@ export async function isAdmin(supabase: SupabaseClient): Promise<boolean> {
 }
 
 /**
- * Check if user can edit (doesn't throw, returns boolean)
+ * Check if user can edit (doesn't throw, returns boolean).
+ * admin, manager, va_entity can edit. viewer and va_readonly cannot.
  */
 export async function canEdit(supabase: SupabaseClient): Promise<boolean> {
   try {
     const profile = await getUserProfile(supabase)
-    return (
-      profile?.is_active === true && (profile?.role === 'admin' || profile?.role === 'manager')
-    )
+    if (!profile?.is_active) return false
+    return ['admin', 'manager', 'va_entity'].includes(profile.role)
   } catch {
     return false
   }

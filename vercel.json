@@ -21,6 +21,10 @@
       "schedule": "0 11 * * *"
     },
     {
+      "path": "/api/cron/auto-archive-stale",
+      "schedule": "0 7 * * *"
+    },
+    {
       "path": "/api/cron/purge-archived",
       "schedule": "0 8 * * *"
     }

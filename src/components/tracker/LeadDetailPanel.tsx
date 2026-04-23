@@ -387,12 +387,56 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
               <StatusDropdown status={(form.status ?? lead.status) as LeadStatus} onChange={handleStatusChange} />
               {cat && <CategoryBadge name={cat.name} color={cat.color} />}
               <FitScoreBadge score={lead.fit_score} />
-              {(lead.amendment_count ?? 0) > 0 && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-red-500/15 text-red-400 border border-red-500/30">
-                  <AlertTriangle size={10} />
-                  {lead.amendment_count} Amendment{(lead.amendment_count ?? 0) > 1 ? 's' : ''}
-                </span>
-              )}
+              {(lead.amendment_count ?? 0) > 0 && (() => {
+                const amdCount = lead.amendment_count ?? 0
+                const reviewedCount = (lead as unknown as { last_reviewed_amendment_count?: number }).last_reviewed_amendment_count ?? 0
+                const unreviewed = amdCount > reviewedCount
+                return (
+                  <div className="inline-flex items-center gap-1">
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
+                      unreviewed
+                        ? 'bg-red-500/15 text-red-400 border-red-500/30'
+                        : 'bg-gray-500/15 text-gray-400 border-gray-500/30 line-through'
+                    }`}>
+                      <AlertTriangle size={10} />
+                      {amdCount} Amendment{amdCount > 1 ? 's' : ''}
+                      {!unreviewed && ' (reviewed)'}
+                    </span>
+                    {unreviewed && (
+                      <button
+                        onClick={async () => {
+                          const notes = prompt('Optional review notes (what changed, what you did):')
+                          if (notes === null) return
+                          try {
+                            const res = await fetch('/api/leads/review-amendment', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ leadId: lead.id, notes }),
+                            })
+                            if (!res.ok) {
+                              const err = await res.json().catch(() => ({}))
+                              alert(`Review failed: ${err.error || res.statusText}`)
+                              return
+                            }
+                            onUpdate({
+                              ...lead,
+                              last_reviewed_amendment_count: amdCount,
+                              amendment_reviewed_at: new Date().toISOString(),
+                              amendment_review_notes: notes || null,
+                            } as GovLead)
+                          } catch (e) {
+                            alert(`Review failed: ${e}`)
+                          }
+                        }}
+                        title="Mark these amendments as reviewed. Flag returns if new amendments arrive."
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-green-600/20 text-green-400 border border-green-500/30 hover:bg-green-600/30 transition"
+                      >
+                        <Check size={10} /> Mark Reviewed
+                      </button>
+                    )}
+                  </div>
+                )
+              })()}
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">

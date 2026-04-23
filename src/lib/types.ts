@@ -109,6 +109,13 @@ export interface GovLead {
   last_amendment_date?: string | null
   last_checked_at?: string | null
   description_hash?: string | null
+  // Amendment review (migration 036) — track which amendment version the user acknowledged
+  last_reviewed_amendment_count?: number | null
+  amendment_reviewed_at?: string | null
+  amendment_reviewed_by?: string | null
+  amendment_review_notes?: string | null
+  // Soft-delete (migration 036) — if set, hidden from main views and auto-purged after 7 days
+  archived_at?: string | null
   created_at: string
   updated_at: string
 }
@@ -116,6 +123,7 @@ export interface GovLead {
 export interface CommercialLead {
   id: string
   entity: EntityType
+  archived_at?: string | null
   organization_name: string
   contact_name?: string | null
   contact_title?: string | null
@@ -224,7 +232,7 @@ export interface Interaction {
   updated_at: string
 }
 
-export type UserRole = 'admin' | 'manager' | 'viewer'
+export type UserRole = 'admin' | 'manager' | 'viewer' | 'va_entity' | 'va_readonly'
 
 export interface UserProfile {
   id: string

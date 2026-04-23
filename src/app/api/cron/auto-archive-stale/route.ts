@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-// Hard-deletes leads that have been archived for 7+ days.
-// Uses the purge_archived_leads_7d() function from migration 036, which
-// writes a snapshot to deleted_audit BEFORE deleting. The audit row lives 30 days.
+// Daily cron. Archives gov_leads whose deadline has passed AND were never acted on.
+// Paired with purge-archived (which hard-deletes 7 days after archive), this gives
+// total "7 days past deadline" auto-cleanup with a 7-day recovery window.
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET
   if (cronSecret) {
@@ -24,35 +24,37 @@ export async function GET(request: Request) {
   const startTs = Date.now()
   const { data: runRow } = await supabase
     .from('feed_runs')
-    .insert({ feed_name: 'purge_archived', status: 'running', trigger_source: triggerSource })
+    .insert({ feed_name: 'auto_archive_stale', status: 'running', trigger_source: triggerSource })
     .select('id').single()
 
   try {
-    const { data, error } = await supabase.rpc('purge_archived_leads_7d')
-    if (error) throw new Error(error.message)
+    // Call the SQL function defined in migration 036
+    const { data, error } = await supabase.rpc('auto_archive_stale_leads')
 
-    const govCount = data?.[0]?.gov_deleted ?? 0
-    const comCount = data?.[0]?.commercial_deleted ?? 0
+    if (error) {
+      if (runRow?.id) {
+        await supabase.from('feed_runs').update({
+          status: 'failed', finished_at: new Date().toISOString(),
+          duration_ms: Date.now() - startTs, error_count: 1, errors: [error.message],
+        }).eq('id', runRow.id)
+      }
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
 
-    // Also purge audit rows older than 30 days (recovery window expired)
-    const { data: auditData } = await supabase.rpc('purge_deleted_audit_older_than_30d')
-    const auditPurged = typeof auditData === 'number' ? auditData : 0
+    const archivedCount = data?.[0]?.archived_count ?? 0
+    const ids = data?.[0]?.ids ?? []
 
     if (runRow?.id) {
       await supabase.from('feed_runs').update({
         status: 'success',
         finished_at: new Date().toISOString(),
         duration_ms: Date.now() - startTs,
-        updated_count: govCount + comCount,
-        run_notes: `Purged ${govCount} gov_leads, ${comCount} commercial_leads; expired ${auditPurged} audit rows`,
+        updated_count: archivedCount,
+        run_notes: `Archived ${archivedCount} stale leads (deadline passed, never acted on)`,
       }).eq('id', runRow.id)
     }
 
-    return NextResponse.json({
-      success: true,
-      purged: { gov_leads: govCount, commercial_leads: comCount, total: govCount + comCount },
-      audit_expired: auditPurged,
-    })
+    return NextResponse.json({ success: true, archived: archivedCount, ids })
   } catch (e) {
     if (runRow?.id) {
       await supabase.from('feed_runs').update({

@@ -2,6 +2,22 @@
 
 ---
 
+## 2026-04-23 — Postgres CREATE OR REPLACE cannot rename parameters (and DROP cascades to policies)
+
+**Problem:** Migration 036 tried `CREATE OR REPLACE FUNCTION user_can_edit(uid uuid)` but migrations 033 and 035 had already defined it as `user_can_edit(p_user_id uuid)`. Postgres errored with `cannot change name of input parameter "p_user_id"` and the whole migration rolled back. Adding `DROP FUNCTION IF EXISTS user_can_edit(uuid);` then failed with `cannot drop function ... because other objects depend on it` — RLS policies across gov_leads, commercial_leads, contacts, subcontractors all call this function.
+**Fix:** Kept the original parameter name `p_user_id` in migration 036's `CREATE OR REPLACE`. The function body still gets updated (to include `va_entity` in the editable roles), but the signature is unchanged so no DROP is needed and no policy gets torn down.
+**Prevention:** Never rename a function parameter in a follow-up migration if existing RLS policies reference that function. `CREATE OR REPLACE` can change the body, volatility, and security attributes — keep the parameter names identical to the original definition. If a rename is truly necessary, you must (1) drop every dependent policy, (2) drop and recreate the function, (3) recreate every policy — all in one transactional migration.
+
+---
+
+## 2026-04-23 — exec_sql RPC not present by default in Supabase
+
+**Problem:** `scripts/deploy-all.mjs` tries `sb.rpc('exec_sql', { sql_text })` as its second-choice migration path, but the `exec_sql` function does not exist in a default Supabase project — it's a custom helper you have to create first.
+**Fix:** Used the direct-pg path instead (session-pooler URI in `DATABASE_URL`, `pg` npm package). That's more reliable anyway because `exec_sql` would itself need DDL privileges we don't automatically have.
+**Prevention:** Store a valid `DATABASE_URL` (session pooler URI with password) in `.env.local` before running any migration script. Don't rely on `exec_sql`. If we ever want the RPC fallback to work, the `CREATE FUNCTION exec_sql(sql_text text) RETURNS void ... SECURITY DEFINER` helper must be seeded into the project once via the dashboard, and the deploy script's documentation should say so.
+
+---
+
 ## 2026-03-25 — SAM.gov Data Quality: Phantom Solicitations from Bulk API Search
 
 **Problem:** SAM.gov bulk search API returned solicitation numbers (e.g. 140P822600011, W912PP26QA015) that returned 404 on the public SAM.gov website. These phantom entries polluted the gov_leads table with unverifiable opportunities.
@@ -182,3 +198,33 @@
 - Test RLS changes immediately after applying them by querying as an authenticated user, not just the service role
 - The compliance_records table still had the old generic policy and continued working, which was the key diagnostic clue (data existed but RBAC-protected tables returned nothing)
 
+
+## [2026-04-22] — Soft-delete was broken in production because archived_at column was never created
+
+**Problem:** Purge-archived cron and all soft-delete UI code referenced `archived_at` column that was never defined in any migration (migrations 001-035 inclusive). The code was written assuming the column existed. In production, every "Delete" button either silently failed or threw. This had gone undetected for weeks because users assumed clicking Delete + things disappearing meant it worked — but rows remained in the DB and just got refetched.
+
+**Fix:** Migration 036 adds `archived_at` to gov_leads, commercial_leads, contacts, subcontractors, plus indexes. Also added `last_reviewed_amendment_count` + review columns so amendments can be marked reviewed.
+
+**Prevention:** Before implementing any feature that touches a new column, grep migrations/ to confirm the column exists. Add a smoke test that inserts a row and sets every "interesting" nullable column.
+
+## [2026-04-22] — SAM.gov feed was pulling only 1-2 leads per week because pagination was capped at 3 pages
+
+**Problem:** Feed was set to `for (let page = 0; page < 3; page++)` — hard cap of 300 opportunities per run even if the 30-day window had more. Combined with dedup on notice_id, the feed appeared to stop producing new leads. There was also no retry on transient SAM.gov 5xx, so a single bad response killed the whole run silently.
+
+**Fix:**
+- Rewrote sam-feed to loop pagination per NAICS code up to 20 pages each (~2,000 opps/NAICS safety cap)
+- Added 3-attempt retry with exponential backoff + jitter on transient errors
+- One NAICS failing no longer kills the whole run; errors accumulated per-NAICS
+- Added `feed_runs` table (migration 036) that logs every run with status/counts/errors
+- Added /admin/feed-health page to watch the feed's health visually
+- Added 400ms sleep between NAICS queries to stay under SAM.gov's 10 req/min rate limit
+
+**Prevention:** Every long-running cron must log to feed_runs before and after. An unlogged run is an invisible run.
+
+## [2026-04-22] — Amendment flag had no way to mark as reviewed
+
+**Problem:** Amendment badge would render forever once `amendment_count > 0`. No review column, no button. Users had to mentally track which amendments they'd already dealt with.
+
+**Fix:** Added `last_reviewed_amendment_count`, `amendment_reviewed_at`, `amendment_reviewed_by`, `amendment_review_notes` to gov_leads. Added "Mark Reviewed" button next to the badge. Added /api/leads/review-amendment endpoint. Badge gray/strikes through when reviewed; re-appears red automatically when feed detects a new amendment (amendment_count bumps above last_reviewed_amendment_count).
+
+**Prevention:** Any "flag" column needs a "flag cleared at" partner column from day one.

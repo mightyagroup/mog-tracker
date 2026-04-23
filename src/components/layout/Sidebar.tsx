@@ -18,7 +18,10 @@ const NAV_ITEMS = [
   { href: '/analytics',  label: 'Analytics',         dot: '#6B7280', icon: BarChart3 },
 ]
 
-const ADMIN_NAV_ITEM = { href: '/admin', label: 'Admin', dot: '#EF4444', icon: Settings }
+const ADMIN_NAV_ITEMS = [
+  { href: '/admin',             label: 'Admin',       dot: '#EF4444', icon: Settings },
+  { href: '/admin/feed-health', label: 'Feed Health', dot: '#10B981', icon: Activity },
+]
 
 export function Sidebar() {
   const pathname = usePathname()
@@ -35,7 +38,7 @@ export function Sidebar() {
     router.push('/login')
   }
 
-  const navItems = isAdmin() ? [...NAV_ITEMS, ADMIN_NAV_ITEM] : NAV_ITEMS
+  const navItems = isAdmin() ? [...NAV_ITEMS, ...ADMIN_NAV_ITEMS] : NAV_ITEMS
 
   return (
     <>

@@ -95,27 +95,52 @@ interface SamResponse {
   _embedded?: { results?: SamOpportunity[] }
 }
 
-// ── Fetch one page from SAM.gov ───────────────────────────────────────────────
-async function fetchSamPage(apiKey: string, postedFrom: string, offset: number): Promise<SamResponse> {
+// ── Fetch one page from SAM.gov (with 3-attempt retry + exponential backoff) ─
+async function fetchSamPage(
+  apiKey: string,
+  postedFrom: string,
+  offset: number,
+  naicsFilter?: string,
+): Promise<SamResponse> {
   const params = new URLSearchParams({
     api_key:    apiKey,
     postedFrom: postedFrom,
     postedTo:   new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
-    naicsCode:  ALL_NAICS.join(','),
+    naicsCode:  naicsFilter ?? ALL_NAICS.join(','),
     limit:      '100',
     offset:     offset.toString(),
   })
   const url = `https://api.sam.gov/prod/opportunities/v2/search?${params.toString()}`
-  const res = await fetch(url, {
-    headers: { Accept: 'application/json' },
-    // AbortSignal.timeout may not be available on all Node versions — use manual controller
-    signal: AbortSignal.timeout ? AbortSignal.timeout(28_000) : undefined,
-  })
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`SAM.gov API ${res.status}: ${text.slice(0, 300)}`)
+
+  let lastErr: unknown
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await fetch(url, {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout ? AbortSignal.timeout(28_000) : undefined,
+      })
+      if (res.status === 429 || res.status >= 500) {
+        // Retryable: backoff and try again
+        const wait = 1000 * Math.pow(2, attempt - 1) + Math.random() * 500
+        await new Promise(r => setTimeout(r, wait))
+        lastErr = new Error(`SAM.gov API ${res.status} (retry ${attempt}/3)`)
+        continue
+      }
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(`SAM.gov API ${res.status}: ${text.slice(0, 300)}`)
+      }
+      return res.json() as Promise<SamResponse>
+    } catch (e) {
+      lastErr = e
+      if (attempt < 3) {
+        const wait = 1000 * Math.pow(2, attempt - 1) + Math.random() * 500
+        await new Promise(r => setTimeout(r, wait))
+        continue
+      }
+    }
   }
-  return res.json() as Promise<SamResponse>
+  throw lastErr instanceof Error ? lastErr : new Error('SAM.gov fetch failed after 3 attempts')
 }
 
 // ── Route handler ─────────────────────────────────────────────────────────────
@@ -167,22 +192,82 @@ export async function GET(request: Request) {
   }
 
 
+  // ── Start feed_runs log row (created immediately so we can see hangs) ───
+  const triggerSource = request.headers.get('user-agent')?.toLowerCase().includes('github')
+    ? 'github_action'
+    : request.headers.get('user-agent')?.toLowerCase().includes('vercel')
+      ? 'vercel_cron'
+      : 'manual'
+
+  const runStart = Date.now()
+  let feedRunId: string | null = null
+  if (!dryRun) {
+    const { data: runRow } = await supabase
+      .from('feed_runs')
+      .insert({
+        feed_name: 'sam_gov',
+        status: 'running',
+        trigger_source: triggerSource,
+      })
+      .select('id')
+      .single()
+    feedRunId = runRow?.id ?? null
+  }
+
   // ── Fetch opportunities ───────────────────────────────────────────────────
+  // Widen the window to 30 days so new amendments on older opps still surface
+  // but run the query per NAICS code so one bad code does not poison the batch.
   const postedFrom = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
     .toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
 
   let allOpps: SamOpportunity[] = []
+  const perNaicsCounts: Record<string, number> = {}
+  const fetchErrors: string[] = []
 
-  try {
-    for (let page = 0; page < 3; page++) {
-      const data = await fetchSamPage(apiKey, postedFrom, page * 100)
-      // Handle both response shapes
-      const opps = data.opportunitiesData ?? data._embedded?.results ?? []
-      allOpps = allOpps.concat(opps)
-      if (opps.length < 100) break
+  // Pull each NAICS separately so retries isolate per-code and pagination is unbounded (safety cap 20 pages).
+  for (const naics of ALL_NAICS) {
+    try {
+      let pageIdx = 0
+      while (pageIdx < 20) {
+        const data = await fetchSamPage(apiKey, postedFrom, pageIdx * 100, naics)
+        const opps = data.opportunitiesData ?? data._embedded?.results ?? []
+        if (opps.length === 0) break
+        allOpps = allOpps.concat(opps)
+        perNaicsCounts[naics] = (perNaicsCounts[naics] || 0) + opps.length
+        if (opps.length < 100) break
+        pageIdx++
+        // Stay under SAM.gov rate limits (10 req/min)
+        await new Promise(r => setTimeout(r, 400))
+      }
+    } catch (err) {
+      // One NAICS failing should not kill the whole run
+      fetchErrors.push(`naics ${naics}: ${String(err).slice(0, 200)}`)
     }
-  } catch (err) {
-    return NextResponse.json({ error: 'SAM.gov fetch failed', detail: String(err) }, { status: 502 })
+  }
+
+  // Deduplicate by noticeId across NAICS (same opportunity may come back for multiple codes)
+  const seenIds = new Set<string>()
+  allOpps = allOpps.filter(o => {
+    const id = typeof o.noticeId === 'string' ? o.noticeId : ''
+    if (!id) return true
+    if (seenIds.has(id)) return false
+    seenIds.add(id)
+    return true
+  })
+
+  // If every NAICS failed, mark run as failed and exit
+  if (allOpps.length === 0 && fetchErrors.length >= ALL_NAICS.length) {
+    if (feedRunId) {
+      await supabase.from('feed_runs').update({
+        status: 'failed',
+        finished_at: new Date().toISOString(),
+        duration_ms: Date.now() - runStart,
+        error_count: fetchErrors.length,
+        errors: fetchErrors,
+        run_notes: 'All NAICS queries failed',
+      }).eq('id', feedRunId)
+    }
+    return NextResponse.json({ error: 'SAM.gov fetch failed', detail: fetchErrors }, { status: 502 })
   }
 
   // ── Diagnostics ───────────────────────────────────────────────────────────
@@ -571,10 +656,35 @@ export async function GET(request: Request) {
     }
   }
 
+  // ── Finalize feed_runs log ────────────────────────────────────────────────
+  const allErrors = [...fetchErrors, ...errorLog]
+  const finalStatus = allErrors.length === 0
+    ? 'success'
+    : (inserted + updated > 0 ? 'partial' : 'failed')
+
+  if (feedRunId && !dryRun) {
+    await supabase.from('feed_runs').update({
+      status: finalStatus,
+      finished_at: new Date().toISOString(),
+      duration_ms: Date.now() - runStart,
+      fetched_count: allOpps.length,
+      inserted_count: inserted,
+      updated_count: updated,
+      skipped_count: skippedMalformed + skippedNoEntity + failedVerification,
+      amendment_count: amendmentsDetected,
+      error_count: allErrors.length,
+      errors: allErrors.slice(0, 50),
+      run_notes: `per-NAICS counts: ${JSON.stringify(perNaicsCounts)}`,
+    }).eq('id', feedRunId)
+  }
+
   return NextResponse.json({
-    success:          true,
+    success:          finalStatus !== 'failed',
+    status:           finalStatus,
+    feedRunId,
     dryRun,
     fetched:          allOpps.length,
+    perNaicsCounts,
     verified,
     failedVerification,
     inserted,
@@ -584,9 +694,12 @@ export async function GET(request: Request) {
     docsSynced,
     skippedMalformed,
     skippedNoEntity,
+    fetchErrorCount:  fetchErrors.length,
+    fetchErrors:      fetchErrors.slice(0, 10),
     errorCount:       errorLog.length,
     errors:           errorLog.slice(0, 20),
     sampleRaw,
+    durationMs:       Date.now() - runStart,
     timestamp:        new Date().toISOString(),
   })
 }

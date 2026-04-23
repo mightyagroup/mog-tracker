@@ -5,7 +5,14 @@ import { X } from 'lucide-react'
 import type { EntityType, UserRole } from '@/lib/types'
 
 const ENTITY_OPTIONS: EntityType[] = ['exousia', 'vitalx', 'ironhouse']
-const ROLE_OPTIONS: UserRole[] = ['admin', 'manager', 'viewer']
+const ROLE_OPTIONS: UserRole[] = ['admin', 'manager', 'va_entity', 'va_readonly', 'viewer']
+const ROLE_DESCRIPTIONS: Record<string, string> = {
+  admin:        'Full access. Manages users. Can permanently delete leads.',
+  manager:      'Full data read/write across all entities. Cannot manage users.',
+  va_entity:    'Read/write ONLY assigned entities. Cannot delete permanently.',
+  va_readonly:  'Read-only for assigned entities. No edits.',
+  viewer:       'Read-only across ALL entities.',
+}
 
 interface AddUserModalProps {
   onClose: () => void
@@ -46,8 +53,11 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
       return
     }
 
-    if (formData.role !== 'admin' && formData.entities.length === 0) {
-      setError('Select at least one entity for non-admin users')
+    // Admin and viewer roles are global — they see everything.
+    // VA and manager roles require explicit entity assignment.
+    const isGlobalRole = formData.role === 'admin' || formData.role === 'viewer'
+    if (!isGlobalRole && formData.entities.length === 0) {
+      setError('Select at least one entity for this role')
       return
     }
 
@@ -165,14 +175,15 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
             >
               {ROLE_OPTIONS.map((role) => (
                 <option key={role} value={role}>
-                  {role.charAt(0).toUpperCase() + role.slice(1)}
+                  {role === 'va_entity' ? 'VA (Entity)' : role === 'va_readonly' ? 'VA (Read-only)' : role.charAt(0).toUpperCase() + role.slice(1)}
                 </option>
               ))}
             </select>
+            <p className="mt-1 text-xs text-gray-400">{ROLE_DESCRIPTIONS[formData.role]}</p>
           </div>
 
-          {/* Entities (only if not admin) */}
-          {formData.role !== 'admin' && (
+          {/* Entities — not needed for admin or viewer (both are global) */}
+          {formData.role !== 'admin' && formData.role !== 'viewer' && (
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Entity Access
@@ -196,9 +207,9 @@ export function AddUserModal({ onClose, onSuccess }: AddUserModalProps) {
             </div>
           )}
 
-          {formData.role === 'admin' && (
+          {(formData.role === 'admin' || formData.role === 'viewer') && (
             <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded text-blue-400 text-xs">
-              Admin users have access to all entities
+              {formData.role === 'admin' ? 'Admin' : 'Viewer'} users have access to all entities
             </div>
           )}
 
