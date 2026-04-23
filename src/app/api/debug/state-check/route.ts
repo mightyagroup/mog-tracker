@@ -1,7 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
-export async function GET(request: Request) {
+export async function GET(_request: Request) {
   const supabase = await createServerSupabaseClient()
 
   const TODAY = new Date('2026-04-22')
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
       oldestLead: null as string | null,
       newestLead: null as string | null,
       hasArchivedAt: false,
-      last5Leads: [] as any[],
+      last5Leads: [] as Record<string, unknown>[],
     },
     commercialLeads: {
       byStatus: {} as Record<string, number>,
@@ -33,7 +33,7 @@ export async function GET(request: Request) {
     userProfiles: {
       exists: false,
       count: 0,
-      profiles: [] as any[],
+      profiles: [] as Record<string, unknown>[],
     },
   }
 
