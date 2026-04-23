@@ -7,14 +7,17 @@ export const ENTITY_BRANDING: Record<string, { primary: string; accent: string; 
   ironhouse: { primary: '#292524', accent: '#B45309', name: 'IronHouse Janitorial & Landscaping' },
 }
 
-// NASCENCE Playbook-aligned NAICS codes per entity (LOCKED DOWN 2026-04-04)
-// Exousia: Primary 561210, Secondary 561720, 561730, 562111, 541614
-// IronHouse: Primary 561720, Secondary 561730, 561210, 562111
-// VitalX: Primary 492110, Secondary 492210, 621511, 621610, 485991, 485999, 561990
+// NASCENCE Pillars + Procurement — AUTHORITATIVE NAICS/PSC per entity.
+// Source of truth: Emmanuela's validator skill, confirmed 2026-04-24.
+// All three entities are SAM.gov registered and federal-eligible.
+// VitalX additionally has a commercial healthcare logistics side (non-federal).
 export const ENTITY_NAICS: Record<EntityType, string[]> = {
-  exousia:   ['561210', '561720', '561730', '562111', '541614'],
-  vitalx:    ['492110', '492210', '621511', '621610', '485991', '485999', '561990'],
-  ironhouse: ['561720', '561730', '561210', '562111'],
+  // Exousia: custodial, landscaping, solid waste, facilities ops, procurement/logistics consulting
+  exousia:   ['561720', '561730', '562111', '561210', '541614', '541611'],
+  // VitalX: medical courier, NEMT, lab services support, pharmacy delivery, mobile diagnostics, general healthcare
+  vitalx:    ['492110', '485999', '621511', '492210', '621999'],
+  // IronHouse: exactly 4 categories
+  ironhouse: ['561720', '561730', '562111', '561210'],
 }
 
 // Primary NAICS per entity (for fit score weighting and SAM.gov display)
@@ -26,9 +29,57 @@ export const ENTITY_PRIMARY_NAICS: Record<EntityType, string> = {
 
 // PSC (Product Service Codes) per entity - for SAM.gov search and classification
 export const ENTITY_PSC: Record<EntityType, string[]> = {
-  exousia:   ['S216', 'S201', 'S208', 'S205', 'R706'],
+  exousia:   ['S201', 'S208', 'S205', 'S216', 'R706'],
   vitalx:    ['V119', 'V225', 'Q301', 'Q999'],
-  ironhouse: ['S201', 'S208', 'S216', 'S205'],
+  ironhouse: ['S201', 'S208', 'S205', 'S216'],
+}
+
+// NAICS -> service category + PSC mapping per entity (for validator + proposal display)
+export const ENTITY_NAICS_DETAIL: Record<EntityType, Array<{ naics: string; psc: string; category: string }>> = {
+  exousia: [
+    { naics: '561720', psc: 'S201', category: 'Custodial / Janitorial Services' },
+    { naics: '561730', psc: 'S208', category: 'Landscaping / Grounds Maintenance' },
+    { naics: '562111', psc: 'S205', category: 'Solid Waste Collection' },
+    { naics: '561210', psc: 'S216', category: 'Facilities Operations Support' },
+    { naics: '541614', psc: 'R706', category: 'Procurement / Logistics Consulting' },
+    { naics: '541611', psc: 'R706', category: 'Procurement / Logistics Consulting' },
+  ],
+  vitalx: [
+    { naics: '492110', psc: 'V119', category: 'Medical Courier / Specimen Transport' },
+    { naics: '485999', psc: 'V225', category: 'NEMT (Non-Emergency Medical Transport)' },
+    { naics: '621511', psc: 'Q301', category: 'Lab Services Support' },
+    { naics: '492210', psc: 'V119', category: 'Pharmacy Delivery' },
+    { naics: '621999', psc: 'Q999', category: 'Mobile Diagnostics / General Healthcare Support' },
+  ],
+  ironhouse: [
+    { naics: '561720', psc: 'S201', category: 'Custodial / Janitorial Services' },
+    { naics: '561730', psc: 'S208', category: 'Landscaping / Grounds Maintenance' },
+    { naics: '562111', psc: 'S205', category: 'Solid Waste Collection' },
+    { naics: '561210', psc: 'S216', category: 'Facilities Operations Support' },
+  ],
+}
+
+// Every entity is SAM-registered and federal-eligible
+export const ENTITY_SAM_REGISTERED: Record<EntityType, { active: boolean; uei?: string; cage?: string }> = {
+  exousia:   { active: true, uei: 'XNZ2KYQYK566', cage: '0ENQ3' },
+  vitalx:    { active: true },
+  ironhouse: { active: true },
+}
+
+// Entity eligibility for set-asides (for validator Pass 1)
+export const ENTITY_SET_ASIDE_ELIGIBILITY: Record<EntityType, {
+  wosb: boolean; edwosb: boolean; small_business: boolean; hubzone: boolean; sdvosb: boolean; eight_a: boolean
+}> = {
+  exousia:   { wosb: true,  edwosb: true,  small_business: true, hubzone: false, sdvosb: false, eight_a: false },
+  vitalx:    { wosb: true,  edwosb: true,  small_business: true, hubzone: false, sdvosb: false, eight_a: false },
+  ironhouse: { wosb: false, edwosb: false, small_business: true, hubzone: false, sdvosb: false, eight_a: false },
+}
+
+// VitalX operates federal AND commercial; the other two are federal-only
+export const ENTITY_SECTORS: Record<EntityType, { federal: boolean; commercial: boolean }> = {
+  exousia:   { federal: true, commercial: false },
+  vitalx:    { federal: true, commercial: true },
+  ironhouse: { federal: true, commercial: false },
 }
 
 export const LEAD_STATUSES: LeadStatus[] = [
