@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/auth-context'
-import { LayoutDashboard, Shield, Activity, Building2, LogOut, Menu, X, Users, CalendarCheck, BarChart3, Settings } from 'lucide-react'
+import { LayoutDashboard, Shield, Activity, Building2, LogOut, Menu, X, Users, CalendarCheck, BarChart3, Settings, FileText } from 'lucide-react'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 
 const NAV_ITEMS = [
@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { href: '/exousia',    label: 'Exousia Solutions', dot: '#D4AF37', icon: Shield },
   { href: '/vitalx',     label: 'VitalX',            dot: '#06A59A', icon: Activity },
   { href: '/ironhouse',  label: 'IronHouse',         dot: '#B45309', icon: Building2 },
+  { href: '/proposals',  label: 'Proposals',         dot: '#D4AF37', icon: FileText },
   { href: '/contacts',   label: 'Contacts',          dot: '#6B7280', icon: Users },
   { href: '/compliance', label: 'Compliance',        dot: '#6B7280', icon: CalendarCheck },
   { href: '/analytics',  label: 'Analytics',         dot: '#6B7280', icon: BarChart3 },
