@@ -111,6 +111,28 @@ export default function SubmitPage() {
     }
   }
 
+  async function downloadDocx() {
+    const r = await fetch('/api/proposals/generate-docx', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ proposal_id: proposalId }),
+    })
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}))
+      alert(j.error || 'DOCX generation failed')
+      return
+    }
+    const blob = await r.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    const cd = r.headers.get('Content-Disposition') || ''
+    const m = cd.match(/filename="([^"]+)"/)
+    a.download = m ? m[1] : 'proposal.docx'
+    document.body.appendChild(a); a.click(); a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 5000)
+  }
+
   if (!p) return <div className="px-8 py-6 text-white">Loading proposal…</div>
 
   return (
@@ -153,11 +175,17 @@ export default function SubmitPage() {
           <div>
             <div className="text-xs uppercase tracking-wider text-gray-400 mb-2">Package</div>
             <button onClick={buildPackage} disabled={packaging} className="w-full px-4 py-2 rounded bg-[#374151] text-sm disabled:opacity-50">
-              {packaging ? 'Building package…' : 'Generate submission package'}
+              {packaging ? 'Building manifest…' : 'Lock submission manifest'}
             </button>
             {packageUrl && (
-              <a href={packageUrl} target="_blank" rel="noreferrer" className="block mt-2 text-xs text-[#D4AF37] underline">Download package</a>
+              <a href={packageUrl} target="_blank" rel="noreferrer" className="block mt-2 text-xs text-[#D4AF37] underline">View manifest</a>
             )}
+            <button
+              onClick={downloadDocx}
+              className="mt-2 w-full px-4 py-2 rounded bg-[#111827] border border-[#374151] text-sm hover:border-[#4B5563]"
+            >
+              Download proposal as DOCX
+            </button>
           </div>
           <div>
             <div className="text-xs uppercase tracking-wider text-gray-400 mb-2">Mark as submitted</div>
