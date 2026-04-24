@@ -7,7 +7,7 @@ export const ENTITY_BRANDING: Record<string, { primary: string; accent: string; 
   ironhouse: { primary: '#292524', accent: '#B45309', name: 'IronHouse Janitorial & Landscaping' },
 }
 
-// NASCENCE Pillars + Procurement — AUTHORITATIVE NAICS/PSC per entity.
+// NASCENCE Pillars + Procurement â AUTHORITATIVE NAICS/PSC per entity.
 // Source of truth: Emmanuela's validator skill, confirmed 2026-04-24.
 // All three entities are SAM.gov registered and federal-eligible.
 // VitalX additionally has a commercial healthcare logistics side (non-federal).
@@ -67,12 +67,13 @@ export const ENTITY_SAM_REGISTERED: Record<EntityType, { active: boolean; uei?: 
 }
 
 // Entity eligibility for set-asides (for validator Pass 1)
+// swam = Virginia SWaM (Small, Women-owned, Minority-owned) for eVA bids.
 export const ENTITY_SET_ASIDE_ELIGIBILITY: Record<EntityType, {
-  wosb: boolean; edwosb: boolean; small_business: boolean; hubzone: boolean; sdvosb: boolean; eight_a: boolean
+  wosb: boolean; edwosb: boolean; small_business: boolean; hubzone: boolean; sdvosb: boolean; eight_a: boolean; swam?: boolean
 }> = {
-  exousia:   { wosb: true,  edwosb: true,  small_business: true, hubzone: false, sdvosb: false, eight_a: false },
-  vitalx:    { wosb: true,  edwosb: true,  small_business: true, hubzone: false, sdvosb: false, eight_a: false },
-  ironhouse: { wosb: false, edwosb: false, small_business: true, hubzone: false, sdvosb: false, eight_a: false },
+  exousia:   { wosb: true,  edwosb: true,  small_business: true, hubzone: false, sdvosb: false, eight_a: false, swam: true },
+  vitalx:    { wosb: true,  edwosb: true,  small_business: true, hubzone: false, sdvosb: false, eight_a: false, swam: false },
+  ironhouse: { wosb: false, edwosb: false, small_business: true, hubzone: false, sdvosb: false, eight_a: false, swam: false },
 }
 
 // VitalX operates federal AND commercial; the other two are federal-only

@@ -54,7 +54,7 @@ const FIELD_KEYWORDS: Record<string, string[]> = {
   description:          ['description', 'scope', 'requirements', 'overview', 'summary'],
 }
 
-// ── CSV Parser ─────────────────────────────────────────────────────────────
+// ââ CSV Parser âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function parseCSV(text: string): { headers: string[]; rows: Record<string, string>[] } {
   const lines: string[] = []
   let current = ''
@@ -102,7 +102,7 @@ function parseCSV(text: string): { headers: string[]; rows: Record<string, strin
   return { headers, rows }
 }
 
-// ── Auto-detect mapping ────────────────────────────────────────────────────
+// ââ Auto-detect mapping ââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function autoMap(headers: string[]): MappingState {
   const mapping: MappingState = {}
   for (const [field, keywords] of Object.entries(FIELD_KEYWORDS)) {
@@ -114,7 +114,7 @@ function autoMap(headers: string[]): MappingState {
   return mapping
 }
 
-// ── Value transformers ─────────────────────────────────────────────────────
+// ââ Value transformers âââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function parseValue(raw: string): number | null {
   if (!raw.trim()) return null
   const cleaned = raw.replace(/[$,\s]/g, '').toLowerCase()
@@ -182,7 +182,7 @@ function mapSource(raw: string): SourceType {
   return 'manual'
 }
 
-// ── Main component ─────────────────────────────────────────────────────────
+// ââ Main component âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 export function ImportCSVModal({ entity, onClose, onImport }: ImportCSVModalProps) {
   const [step, setStep] = useState<Step>('upload')
   const [csvHeaders, setCsvHeaders] = useState<string[]>([])
@@ -193,25 +193,75 @@ export function ImportCSVModal({ entity, onClose, onImport }: ImportCSVModalProp
   const [dragOver, setDragOver] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const processFile = useCallback((file: File) => {
-    const reader = new FileReader()
-    reader.onload = e => {
-      const text = e.target?.result as string
-      const { headers, rows } = parseCSV(text)
-      if (headers.length === 0) return
-      setCsvHeaders(headers)
-      setCsvRows(rows)
-      setMapping(autoMap(headers))
-      setStep('map')
+  const [uploading, setUploading] = useState(false)
+  const [uploadErr, setUploadErr] = useState<string | null>(null)
+
+  const processFile = useCallback(async (file: File) => {
+    setUploadErr(null)
+    const nm = file.name.toLowerCase()
+
+    if (nm.endsWith('.csv')) {
+      const reader = new FileReader()
+      reader.onload = e => {
+        const text = e.target?.result as string
+        const { headers, rows } = parseCSV(text)
+        if (headers.length === 0) { setUploadErr('CSV has no rows'); return }
+        setCsvHeaders(headers)
+        setCsvRows(rows)
+        setMapping(autoMap(headers))
+        setStep('map')
+      }
+      reader.readAsText(file)
+      return
     }
-    reader.readAsText(file)
-  }, [])
+
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('entity', entity)
+      fd.append('mode', 'extract_leads')
+      const r = await fetch('/api/leads/import-file', { method: 'POST', body: fd })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'upload failed')
+
+      if (j.csv_rows && j.headers) {
+        setCsvHeaders(j.headers)
+        setCsvRows(j.csv_rows)
+        setMapping(autoMap(j.headers))
+        setStep('map')
+        return
+      }
+
+      const leads = j.leads || []
+      if (leads.length === 0) {
+        setUploadErr('Claude could not extract any opportunities from this file. Try a clearer scan or different format.')
+        return
+      }
+      const hdrs = ['title', 'solicitation_number', 'agency', 'naics_code', 'set_aside', 'response_deadline', 'estimated_value', 'place_of_performance', 'description', 'sam_gov_url', 'incumbent_contractor']
+      const rs = leads.map((l: Record<string, unknown>) => {
+        const row: Record<string, string> = {}
+        hdrs.forEach(h => { row[h] = l[h] == null ? '' : String(l[h]) })
+        return row
+      })
+      setCsvHeaders(hdrs)
+      setCsvRows(rs)
+      const autoMapping: MappingState = {}
+      hdrs.forEach(h => { autoMapping[h] = h })
+      setMapping(autoMapping)
+      setStep('map')
+    } catch (e: unknown) {
+      setUploadErr((e as Error).message)
+    } finally {
+      setUploading(false)
+    }
+  }, [entity])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setDragOver(false)
     const file = e.dataTransfer.files[0]
-    if (file?.name.endsWith('.csv')) processFile(file)
+    if (file) processFile(file)
   }, [processFile])
 
   async function handleImport() {
@@ -285,7 +335,7 @@ export function ImportCSVModal({ entity, onClose, onImport }: ImportCSVModalProp
 
   return (
     <Modal
-      title="Import Leads from CSV"
+      title="Import Leads"
       onClose={onClose}
       size="lg"
       footer={
@@ -308,7 +358,7 @@ export function ImportCSVModal({ entity, onClose, onImport }: ImportCSVModalProp
     >
       {step === 'upload' && (
         <div className="space-y-5">
-          <p className="text-gray-400 text-sm">Export your Notion bid tracker as CSV, then upload it here. The tool will auto-detect and map Notion column names to app fields.</p>
+          <p className="text-gray-400 text-sm">Upload any format — CSV, Excel, PDF solicitation, Word doc, screenshot, or photo. The tool parses structured files directly and uses Claude to extract opportunities from unstructured ones.</p>
 
           <div
             onDragOver={e => { e.preventDefault(); setDragOver(true) }}
@@ -320,31 +370,43 @@ export function ImportCSVModal({ entity, onClose, onImport }: ImportCSVModalProp
             }`}
           >
             <Upload size={32} className="text-gray-500 mb-3" />
-            <p className="text-white font-medium mb-1">Drop CSV file here or click to browse</p>
-            <p className="text-gray-500 text-sm">Notion exports, Excel .csv, or any CSV format</p>
+            <p className="text-white font-medium mb-1">
+              {uploading ? 'Parsing file with Claude…' : 'Drop file here or click to browse'}
+            </p>
+            <p className="text-gray-500 text-sm">
+              CSV, Excel (.xlsx), PDF, Word (.docx), PNG, JPG — solicitations, Notion exports, scans, or photos all work
+            </p>
             <input
               ref={fileRef}
               type="file"
-              accept=".csv"
+              accept=".csv,.xlsx,.xls,.pdf,.docx,.doc,.png,.jpg,.jpeg,.gif,.webp,.txt,.md"
               className="hidden"
               onChange={e => { const f = e.target.files?.[0]; if (f) processFile(f) }}
             />
           </div>
 
+          {uploadErr && (
+            <div className="bg-red-900/30 border border-red-700 rounded-lg p-3 text-sm text-red-200">
+              {uploadErr}
+            </div>
+          )}
+
           <div className="bg-[#111827] rounded-lg border border-[#374151] p-4 text-sm">
-            <p className="text-gray-400 font-medium mb-2">How to export from Notion:</p>
-            <ol className="text-gray-500 space-y-1 list-decimal list-inside text-xs">
-              <li>Open your Notion database view</li>
-              <li>Click the ••• menu → Export → CSV</li>
-              <li>Upload the downloaded file here</li>
-            </ol>
+            <p className="text-gray-400 font-medium mb-2">What works well:</p>
+            <ul className="text-gray-500 space-y-1 list-disc list-inside text-xs">
+              <li><span className="text-gray-300">CSV / Excel</span> — straight to the mapping screen</li>
+              <li><span className="text-gray-300">PDF solicitation</span> — Claude reads it and extracts title, solicitation #, agency, NAICS, set-aside, deadline</li>
+              <li><span className="text-gray-300">Word (.docx)</span> — text extracted and parsed same way</li>
+              <li><span className="text-gray-300">PNG / JPG</span> — photo of a printed notice or a screenshot</li>
+              <li><span className="text-gray-300">Notion export</span> — use the ••• menu → Export → CSV</li>
+            </ul>
           </div>
         </div>
       )}
 
       {step === 'map' && (
         <div className="space-y-4">
-          <p className="text-gray-400 text-sm">Map your CSV columns to app fields. Fields marked <span className="text-red-400">*</span> are required. Auto-detected mappings are pre-filled — adjust as needed.</p>
+          <p className="text-gray-400 text-sm">Map your CSV columns to app fields. Fields marked <span className="text-red-400">*</span> are required. Auto-detected mappings are pre-filled â adjust as needed.</p>
 
           <div className="border border-[#374151] rounded-lg overflow-hidden">
             <div className="grid grid-cols-2 bg-[#161E2E] px-4 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-[#374151]">
@@ -366,7 +428,7 @@ export function ImportCSVModal({ entity, onClose, onImport }: ImportCSVModalProp
                     onChange={e => setMapping(m => ({ ...m, [field.key]: e.target.value }))}
                     className="bg-[#111827] border border-[#374151] rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-[#D4AF37] w-full"
                   >
-                    <option value="">— Skip —</option>
+                    <option value="">â Skip â</option>
                     {csvHeaders.map(h => (
                       <option key={h} value={h}>{h}</option>
                     ))}
@@ -383,7 +445,7 @@ export function ImportCSVModal({ entity, onClose, onImport }: ImportCSVModalProp
                 {Object.entries(mapping).filter(([, col]) => col).slice(0, 5).map(([field, col]) => (
                   <div key={field} className="flex gap-2">
                     <span className="text-gray-500 w-40 flex-shrink-0">{APP_FIELDS.find(f => f.key === field)?.label}:</span>
-                    <span className="text-gray-300 truncate">{csvRows[0][col] || '—'}</span>
+                    <span className="text-gray-300 truncate">{csvRows[0][col] || 'â'}</span>
                   </div>
                 ))}
               </div>
@@ -401,7 +463,7 @@ export function ImportCSVModal({ entity, onClose, onImport }: ImportCSVModalProp
             <h3 className="text-white font-semibold text-lg mb-1">Import Complete</h3>
             <p className="text-gray-400 text-sm">
               {result.imported > 0 && <span className="text-green-400 font-medium">{result.imported} leads imported successfully</span>}
-              {result.imported > 0 && result.skipped > 0 && <span className="text-gray-500"> · </span>}
+              {result.imported > 0 && result.skipped > 0 && <span className="text-gray-500"> Â· </span>}
               {result.skipped > 0 && <span className="text-yellow-400">{result.skipped} rows skipped</span>}
             </p>
           </div>
