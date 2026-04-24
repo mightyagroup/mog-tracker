@@ -3,15 +3,30 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #111827;
+  --foreground: #ededed;
+  --panel: #1F2937;
+  --panel-hover: #2D3748;
+  --border: #374151;
+  --border-hover: #4B5563;
+  --muted: #9CA3AF;
+  --text: #ffffff;
+  --text-subtle: #E5E7EB;
+  --accent: #D4AF37;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Light theme — activated when <html data-theme="light"> */
+html[data-theme="light"] {
+  --background: #F9FAFB;
+  --foreground: #111827;
+  --panel: #FFFFFF;
+  --panel-hover: #F3F4F6;
+  --border: #E5E7EB;
+  --border-hover: #D1D5DB;
+  --muted: #6B7280;
+  --text: #111827;
+  --text-subtle: #374151;
+  --accent: #B8952E;
 }
 
 body {
@@ -19,6 +34,29 @@ body {
   background: var(--background);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Light-mode overrides for hardcoded Tailwind arbitrary-value colors used throughout the app. */
+html[data-theme="light"] .bg-\[\#111827\] { background-color: #F9FAFB !important; }
+html[data-theme="light"] .bg-\[\#1F2937\] { background-color: #FFFFFF !important; }
+html[data-theme="light"] .bg-\[\#2D3748\] { background-color: #F3F4F6 !important; }
+html[data-theme="light"] .bg-\[\#374151\] { background-color: #E5E7EB !important; }
+html[data-theme="light"] .bg-\[\#161E2E\] { background-color: #F3F4F6 !important; }
+
+html[data-theme="light"] .border-\[\#374151\] { border-color: #E5E7EB !important; }
+html[data-theme="light"] .border-\[\#4B5563\] { border-color: #D1D5DB !important; }
+
+html[data-theme="light"] .text-white { color: #111827 !important; }
+html[data-theme="light"] .text-gray-400 { color: #6B7280 !important; }
+html[data-theme="light"] .text-gray-300 { color: #374151 !important; }
+html[data-theme="light"] .text-gray-500 { color: #9CA3AF !important; }
+
+/* Buttons & hovers */
+html[data-theme="light"] .hover\:bg-\[\#374151\]:hover { background-color: #E5E7EB !important; }
+html[data-theme="light"] .hover\:bg-\[\#2D3748\]:hover { background-color: #F3F4F6 !important; }
+html[data-theme="light"] .hover\:bg-\[\#4B5563\]:hover { background-color: #D1D5DB !important; }
+html[data-theme="light"] .hover\:border-\[\#4B5563\]:hover { border-color: #D1D5DB !important; }
+
+/* Gold accent stays the same in both themes */
 
 @layer utilities {
   .text-balance {

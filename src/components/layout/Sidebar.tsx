@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/auth-context'
 import { LayoutDashboard, Shield, Activity, Building2, LogOut, Menu, X, Users, CalendarCheck, BarChart3, Settings, FileText, HardDrive } from 'lucide-react'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
+import { ThemeToggle } from '@/components/layout/ThemeToggle'
 
 const NAV_ITEMS = [
   { href: '/',           label: 'MOG Command',      dot: '#D4AF37', icon: LayoutDashboard },
@@ -82,6 +83,7 @@ export function Sidebar() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <NotificationBell />
             <button
               onClick={() => setMobileOpen(false)}
