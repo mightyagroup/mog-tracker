@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/auth-context'
-import { LayoutDashboard, Shield, Activity, Building2, LogOut, Menu, X, Users, CalendarCheck, BarChart3, Settings, FileText } from 'lucide-react'
+import { LayoutDashboard, Shield, Activity, Building2, LogOut, Menu, X, Users, CalendarCheck, BarChart3, Settings, FileText, HardDrive } from 'lucide-react'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 
 const NAV_ITEMS = [
@@ -20,8 +20,9 @@ const NAV_ITEMS = [
 ]
 
 const ADMIN_NAV_ITEMS = [
-  { href: '/admin',             label: 'Admin',       dot: '#EF4444', icon: Settings },
-  { href: '/admin/feed-health', label: 'Feed Health', dot: '#10B981', icon: Activity },
+  { href: '/admin',                label: 'Admin',         dot: '#EF4444', icon: Settings },
+  { href: '/admin/feed-health',    label: 'Feed Health',   dot: '#10B981', icon: Activity },
+  { href: '/admin/entity-drives',  label: 'Entity Drives', dot: '#6366F1', icon: HardDrive },
 ]
 
 export function Sidebar() {

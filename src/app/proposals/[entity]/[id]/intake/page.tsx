@@ -1,12 +1,13 @@
 'use client'
 
-// Intake wizard — required fields gated before progressing to drafting.
+// Intake wizard â required fields gated before progressing to drafting.
 // No skipping. Every proposal must complete intake or sit in "intake" status.
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { SolicitationPanel } from '@/components/proposals/SolicitationPanel'
 
 type Intake = {
   solicitation_number: string
@@ -147,18 +148,18 @@ export default function IntakePage() {
   const inputCls = "w-full bg-[#111827] border border-[#374151] rounded px-3 py-2 text-sm text-white"
   const labelCls = "block text-xs uppercase tracking-wider text-gray-400 mb-1"
 
-  if (loading) return <div className="px-8 py-6 text-white">Loading intake…</div>
+  if (loading) return <div className="px-8 py-6 text-white">Loading intakeâ¦</div>
 
   return (
     <div className="px-8 py-6 min-h-screen bg-[#111827] text-white">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-2xl font-bold">Intake — {entity}</h1>
+          <h1 className="text-2xl font-bold">Intake â {entity}</h1>
           <p className="text-sm text-gray-400 mt-1">All {REQUIRED_FIELDS.length} required fields must be completed before drafting begins.</p>
         </div>
         <div className="flex gap-3">
-          <Link href={'/proposals/' + entity} className="px-3 py-2 rounded bg-[#1F2937] text-sm border border-[#374151]">← Back</Link>
-          <Link href={'/proposals/' + entity + '/' + proposalId + '/validate'} className="px-3 py-2 rounded bg-[#D4AF37] text-[#111827] text-sm font-semibold">Validate →</Link>
+          <Link href={'/proposals/' + entity} className="px-3 py-2 rounded bg-[#1F2937] text-sm border border-[#374151]">â Back</Link>
+          <Link href={'/proposals/' + entity + '/' + proposalId + '/validate'} className="px-3 py-2 rounded bg-[#D4AF37] text-[#111827] text-sm font-semibold">Validate â</Link>
         </div>
       </div>
 
@@ -167,6 +168,8 @@ export default function IntakePage() {
       )}
       {error && <div className="bg-red-900/30 border border-red-700 text-red-200 p-3 rounded mb-4">{error}</div>}
       {msg && <div className="bg-blue-900/30 border border-blue-700 text-blue-200 p-3 rounded mb-4">{msg}</div>}
+
+      <SolicitationPanel proposalId={proposalId} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-[#1F2937] border border-[#374151] rounded-xl p-5 space-y-4">
@@ -186,13 +189,13 @@ export default function IntakePage() {
             <div>
               <label className={labelCls}>Submission Method *</label>
               <select className={inputCls} value={form.submission_method} onChange={e => setForm({ ...form, submission_method: e.target.value })}>
-                <option value="">Select…</option>
+                <option value="">Selectâ¦</option>
                 {SUBMISSION_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
             </div>
             <div className="col-span-2">
               <label className={labelCls}>Submission Portal / URL</label>
-              <input className={inputCls} value={form.submission_portal_url} onChange={e => setForm({ ...form, submission_portal_url: e.target.value })} placeholder="https://sam.gov/… or email address" />
+              <input className={inputCls} value={form.submission_portal_url} onChange={e => setForm({ ...form, submission_portal_url: e.target.value })} placeholder="https://sam.gov/â¦ or email address" />
             </div>
             <div>
               <label className={labelCls}>NAICS Code *</label>
@@ -234,12 +237,12 @@ export default function IntakePage() {
             </div>
             <div className="col-span-2">
               <label className={labelCls}>Evaluation Factors (Section M) *</label>
-              <textarea className={inputCls} rows={3} value={form.evaluation_factors} onChange={e => setForm({ ...form, evaluation_factors: e.target.value })} placeholder="e.g. LPTA, Best Value Trade-off, weighted factors…" />
+              <textarea className={inputCls} rows={3} value={form.evaluation_factors} onChange={e => setForm({ ...form, evaluation_factors: e.target.value })} placeholder="e.g. LPTA, Best Value Trade-off, weighted factorsâ¦" />
             </div>
             <div>
               <label className={labelCls}>Pricing Format *</label>
               <select className={inputCls} value={form.pricing_format} onChange={e => setForm({ ...form, pricing_format: e.target.value })}>
-                <option value="">Select…</option>
+                <option value="">Selectâ¦</option>
                 {PRICING_FORMATS.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
@@ -276,7 +279,7 @@ export default function IntakePage() {
               const done = typeof v === 'string' ? v.trim().length > 0 : Boolean(v)
               return (
                 <li key={f} className="flex items-center gap-2 text-sm">
-                  <span className={done ? 'text-green-400' : 'text-gray-500'}>{done ? '✓' : '○'}</span>
+                  <span className={done ? 'text-green-400' : 'text-gray-500'}>{done ? 'â' : 'â'}</span>
                   <span className={done ? 'text-gray-300' : 'text-gray-500'}>{f}</span>
                 </li>
               )
