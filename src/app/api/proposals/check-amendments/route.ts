@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
 // POST /api/proposals/check-amendments  { proposal_id: string }
-// Also callable as GET /api/cron/check-amendments (no body) — scans all active proposals.
+// Also callable as GET /api/cron/check-amendments (no body) â scans all active proposals.
 //
 // Looks up the solicitation on SAM.gov by notice_id or solicitation_number. Records
 // amendment_count and a list of amendment dates. If the count has grown since last
@@ -43,7 +43,7 @@ async function checkOne(proposal: Record<string, unknown>, supa: ReturnType<type
   if (newCount > priorCount) {
     patch.amendments_incorporated = false
   }
-  await supa.from('proposals').update(patch).eq('id', proposal.id as string)
+  await (supa.from('proposals').update as (p: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<unknown> })(patch).eq('id', proposal.id as string)
   return { proposal_id: proposal.id, prior_count: priorCount, new_count: newCount, new_amendments: newCount > priorCount }
 }
 
