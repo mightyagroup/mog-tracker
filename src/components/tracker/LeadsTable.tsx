@@ -37,7 +37,7 @@ function AmendmentBadge({ count, lastDate }: { count: number; lastDate?: string 
           ? 'bg-red-500/20 text-red-400 animate-pulse'
           : 'bg-amber-500/15 text-amber-400'
       }`}
-      title={`${count} amendment(s) detected${lastDate ? ` — last: ${new Date(lastDate).toLocaleDateString()}` : ''}`}
+      title={`${count} amendment(s) detected${lastDate ? ` â last: ${new Date(lastDate).toLocaleDateString()}` : ''}`}
     >
       <AlertTriangle size={10} />
       {count > 1 ? `${count} amendments` : 'Amended'}
@@ -177,7 +177,7 @@ export function LeadsTable({
     setLoading(false)
   }
 
-  // ── Filtering ──────────────────────────────────────────────────────────────
+  // ââ Filtering ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   const filteredLeads = useMemo(() => {
     let result = leads
 
@@ -203,7 +203,7 @@ export function LeadsTable({
     return result
   }, [leads, searchQuery, statusFilters, categoryFilter, setAsideFilter, sourceFilter, regionFilter, showLowFit, entity])
 
-  // ── Sorting ────────────────────────────────────────────────────────────────
+  // ââ Sorting ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   const sortedLeads = useMemo(() => {
     return [...filteredLeads].sort((a, b) => {
       let av: string | number | null = a[sortField] as string | number | null
@@ -227,7 +227,7 @@ export function LeadsTable({
     else { setSortField(field); setSortDir('asc') }
   }
 
-  // ── Status change (inline or bulk) ────────────────────────────────────────
+  // ââ Status change (inline or bulk) ââââââââââââââââââââââââââââââââââââââââ
   async function handleStatusChange(leadId: string, newStatus: LeadStatus) {
     const lead = leads.find(l => l.id === leadId)
     const oldStatus = lead?.status || 'unknown'
@@ -281,7 +281,7 @@ export function LeadsTable({
     setPendingDeleteId(null)
   }
 
-  // ── Selection ─────────────────────────────────────────────────────────────
+  // ââ Selection âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   function toggleSelect(id: string) {
     setSelectedIds(prev => {
       const next = new Set(prev)
@@ -348,13 +348,15 @@ export function LeadsTable({
           </button>
           <button
             onClick={() => {
-              const count = exportLeadsToCSV(sortedLeads, categories)
-              alert(`Exported ${count} leads to CSV`) // basic user feedback
+              const subset = selectedIds.size > 0 ? sortedLeads.filter(l => selectedIds.has(l.id)) : sortedLeads
+              const count = exportLeadsToCSV(subset, categories)
+              const scope = selectedIds.size > 0 ? 'selected' : 'all filtered'
+              alert('Exported ' + count + ' ' + scope + ' leads to CSV')
             }}
             className="flex items-center gap-2 px-3 py-2 border border-[#374151] text-gray-400 hover:text-white hover:bg-[#374151] rounded-lg text-sm transition"
           >
             <Download size={14} />
-            Export
+            {selectedIds.size > 0 ? ('Export ' + selectedIds.size + ' selected') : 'Export'}
           </button>
           <button
             onClick={async () => {
@@ -519,7 +521,7 @@ export function LeadsTable({
                     onClick={() => setSelectedLead(l)}
                     className="block text-xs text-gray-300 hover:text-white transition truncate max-w-full text-left"
                   >
-                    <span className="text-red-400 font-mono mr-1">{l.solicitation_number || '—'}</span>
+                    <span className="text-red-400 font-mono mr-1">{l.solicitation_number || 'â'}</span>
                     {l.title}
                     <span className="text-gray-500 ml-2">
                       ({l.amendment_count} amendment{(l.amendment_count ?? 0) > 1 ? 's' : ''})
@@ -547,7 +549,7 @@ export function LeadsTable({
             className="text-xs text-amber-500 hover:text-amber-400 transition flex items-center gap-1"
           >
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
-            {lowFitCount} low-fit {lowFitCount === 1 ? 'lead' : 'leads'} hidden — Show all
+            {lowFitCount} low-fit {lowFitCount === 1 ? 'lead' : 'leads'} hidden â Show all
           </button>
         )}
         {showLowFit && lowFitCount > 0 && (
@@ -649,7 +651,7 @@ export function LeadsTable({
                         </div>
                       </td>
                       <td className="px-4 py-3 text-gray-300 max-w-[160px]">
-                        <div className="truncate">{lead.agency ?? '—'}</div>
+                        <div className="truncate">{lead.agency ?? 'â'}</div>
                       </td>
                       <td className="px-4 py-3">
                         <DeadlineCountdown deadline={lead.response_deadline} />
@@ -658,7 +660,7 @@ export function LeadsTable({
                         {formatCurrency(lead.estimated_value)}
                       </td>
                       <td className="px-4 py-3 text-gray-400 text-xs max-w-[120px]">
-                        <span className="truncate block">{lead.incumbent_contractor ?? '—'}</span>
+                        <span className="truncate block">{lead.incumbent_contractor ?? 'â'}</span>
                       </td>
                       <td className="px-4 py-3 text-gray-300 font-mono text-xs whitespace-nowrap">
                         {formatCurrency(lead.previous_award_total)}
@@ -675,7 +677,7 @@ export function LeadsTable({
                       <td className="px-4 py-3">
                         {(() => {
                           const p = complianceProgress.get(lead.id)
-                          if (!p || p.total === 0) return <span className="text-gray-600 text-xs">—</span>
+                          if (!p || p.total === 0) return <span className="text-gray-600 text-xs">â</span>
                           const pct = Math.round((p.completed / p.total) * 100)
                           const barColor = pct === 100 ? '#4ADE80' : accentColor
                           return (
@@ -689,13 +691,13 @@ export function LeadsTable({
                         })()}
                       </td>
                       <td className="px-4 py-3">
-                        {cat ? <CategoryBadge name={cat.name} color={cat.color} /> : <span className="text-gray-600 text-xs">—</span>}
+                        {cat ? <CategoryBadge name={cat.name} color={cat.color} /> : <span className="text-gray-600 text-xs">â</span>}
                       </td>
                       <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
                         {SOURCE_LABELS[lead.source]}
                       </td>
                       <td className="px-4 py-3">
-                        {lead.created_at ? <FirstSeenBadge createdAt={lead.created_at} /> : <span className="text-gray-600 text-xs">—</span>}
+                        {lead.created_at ? <FirstSeenBadge createdAt={lead.created_at} /> : <span className="text-gray-600 text-xs">â</span>}
                       </td>
                       <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                         <button
@@ -755,7 +757,7 @@ export function LeadsTable({
   )
 }
 
-// ── Sortable column header ─────────────────────────────────────────────────
+// ââ Sortable column header âââââââââââââââââââââââââââââââââââââââââââââââââ
 function SortHeader({ field, current, dir, onClick, children }: {
   field: SortField; current: SortField; dir: SortDir; onClick: (f: SortField) => void; children: React.ReactNode
 }) {
@@ -776,7 +778,7 @@ function SortHeader({ field, current, dir, onClick, children }: {
   )
 }
 
-// ── Inline status select ───────────────────────────────────────────────────
+// ââ Inline status select âââââââââââââââââââââââââââââââââââââââââââââââââââ
 function InlineStatusSelect({ status, onChange }: { status: LeadStatus; onChange: (s: LeadStatus) => void }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -815,7 +817,7 @@ function InlineStatusSelect({ status, onChange }: { status: LeadStatus; onChange
   )
 }
 
-// ── Generic filter select ──────────────────────────────────────────────────
+// ââ Generic filter select ââââââââââââââââââââââââââââââââââââââââââââââââââ
 function FilterSelect({ label, value, onChange, options }: {
   label: string; value: string; onChange: (v: string) => void
   options: { value: string; label: string }[]
