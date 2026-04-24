@@ -22,14 +22,16 @@ export function detectFileKind(filename: string, mimeType: string): FileKind {
 
 /** Extract plain text from a DOCX buffer. */
 export async function parseDocxToText(buffer: Buffer): Promise<string> {
-  const { value } = await mammoth.extractRawText({ buffer })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { value } = await mammoth.extractRawText({ buffer: buffer as any })
   return value
 }
 
 /** Extract all worksheet cells from an XLSX file as a newline-delimited text. */
 export async function parseXlsxToText(buffer: Buffer): Promise<string> {
   const wb = new ExcelJS.Workbook()
-  await wb.xlsx.load(buffer)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await wb.xlsx.load(buffer as any)
   const out: string[] = []
   wb.worksheets.forEach(ws => {
     out.push('### Sheet: ' + ws.name)
@@ -61,7 +63,8 @@ export async function parseXlsxToText(buffer: Buffer): Promise<string> {
 /** Return the XLSX rows as a parsed objects array (first row = headers). */
 export async function parseXlsxToRows(buffer: Buffer, sheetIndex = 0): Promise<Record<string, string>[]> {
   const wb = new ExcelJS.Workbook()
-  await wb.xlsx.load(buffer)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await wb.xlsx.load(buffer as any)
   const ws = wb.worksheets[sheetIndex]
   if (!ws) return []
   const rows: Record<string, string>[] = []
