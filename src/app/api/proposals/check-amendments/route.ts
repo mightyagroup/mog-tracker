@@ -1,17 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-
-// POST /api/proposals/check-amendments  { proposal_id: string }
-// Also callable as GET /api/cron/check-amendments (no body) â scans all active proposals.
-//
-// Looks up the solicitation on SAM.gov by notice_id or solicitation_number. Records
-// amendment_count and a list of amendment dates. If the count has grown since last
-// check, flags the proposal via amendments_detected and updates amendments_latest_check.
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
 export const runtime = 'nodejs'
 export const maxDuration = 90
 
-async function checkOne(proposal: Record<string, unknown>, supa: ReturnType<typeof createClient>): Promise<Record<string, unknown>> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Bag = any
+
+async function checkOne(proposal: Bag, supa: SupabaseClient): Promise<Record<string, unknown>> {
   const samApiKey = process.env.SAMGOV_API_KEY
   if (!samApiKey) return { proposal_id: proposal.id, skipped: 'SAMGOV_API_KEY not set' }
   const solNum = proposal.solicitation_number as string | null
@@ -27,7 +23,7 @@ async function checkOne(proposal: Record<string, unknown>, supa: ReturnType<type
   const opp = j.opportunitiesData?.[0]
   if (!opp) return { proposal_id: proposal.id, not_found: true }
 
-  const modifications: Array<{ date: string; description?: string }> = (opp.modifications || []).map((m: Record<string, unknown>) => ({
+  const modifications: Array<{ date: string; description?: string }> = (opp.modifications || []).map((m: Bag) => ({
     date: (m.modificationNumber as string) || (m.postedDate as string) || '',
     description: m.description as string | undefined,
   }))
@@ -35,7 +31,7 @@ async function checkOne(proposal: Record<string, unknown>, supa: ReturnType<type
   const prior = (proposal.amendments_detected as unknown[]) || []
   const priorCount = Array.isArray(prior) ? prior.length : 0
 
-  const patch: Record<string, unknown> = {
+  const patch: Bag = {
     amendments_latest_check: new Date().toISOString(),
     amendments_detected: modifications,
     amendment_count: newCount,
@@ -43,7 +39,7 @@ async function checkOne(proposal: Record<string, unknown>, supa: ReturnType<type
   if (newCount > priorCount) {
     patch.amendments_incorporated = false
   }
-  await (supa.from('proposals').update as (p: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<unknown> })(patch).eq('id', proposal.id as string)
+  await supa.from('proposals').update(patch).eq('id', proposal.id as string)
   return { proposal_id: proposal.id, prior_count: priorCount, new_count: newCount, new_amendments: newCount > priorCount }
 }
 
@@ -60,7 +56,7 @@ export async function POST(req: NextRequest) {
     if (proposalId) {
       const { data: p } = await supa.from('proposals').select('*').eq('id', proposalId).single()
       if (!p) return NextResponse.json({ error: 'proposal not found' }, { status: 404 })
-      const out = await checkOne(p as Record<string, unknown>, supa)
+      const out = await checkOne(p as Bag, supa)
       return NextResponse.json(out)
     }
 
@@ -69,9 +65,9 @@ export async function POST(req: NextRequest) {
       .in('status', ['drafting', 'pink_team', 'validating', 'ready'])
       .is('archived_at', null)
     const results: Record<string, unknown>[] = []
-    for (const p of (props as Record<string, unknown>[] | null) || []) {
+    for (const p of (props as Bag[] | null) || []) {
       results.push(await checkOne(p, supa))
-      await new Promise(r => setTimeout(r, 1200)) // be kind to SAM
+      await new Promise(r => setTimeout(r, 1200))
     }
     return NextResponse.json({ ok: true, checked: results.length, results })
   } catch (e: unknown) {
