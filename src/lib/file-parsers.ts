@@ -38,19 +38,7 @@ export async function parseXlsxToText(buffer: Buffer): Promise<string> {
     ws.eachRow({ includeEmpty: false }, row => {
       const cells: string[] = []
       row.eachCell({ includeEmpty: false }, cell => {
-        const v = cell.value
-        let s = ''
-        if (v == null) s = ''
-        else if (typeof v === 'object' && 'richText' in (v as Record<string, unknown>)) {
-          const rich = (v as { richText?: { text: string }[] }).richText || []
-          s = rich.map(r => r.text).join('')
-        } else if (typeof v === 'object' && 'result' in (v as Record<string, unknown>)) {
-          s = String((v as { result?: unknown }).result ?? '')
-        } else if (v instanceof Date) {
-          s = v.toISOString()
-        } else {
-          s = String(v)
-        }
+        const s = cell.text == null ? '' : String(cell.text)
         cells.push(s.trim())
       })
       out.push(cells.join('\t'))
@@ -72,7 +60,7 @@ export async function parseXlsxToRows(buffer: Buffer, sheetIndex = 0): Promise<R
   ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
     const vals: string[] = []
     row.eachCell({ includeEmpty: false }, cell => {
-      vals.push(cell.value == null ? '' : String(cell.value))
+      vals.push(cell.text == null ? '' : String(cell.text))
     })
     if (rowNumber === 1) {
       headers = vals.map(v => v.trim())
