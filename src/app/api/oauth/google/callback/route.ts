@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getOAuthCredsForEntity, EntitySlug } from '@/lib/google-drive-client'
 
 export const runtime = 'nodejs'
@@ -14,7 +15,7 @@ export async function GET(req: NextRequest) {
   const error = url.searchParams.get('error')
   const cookieState = req.cookies.get('oauth_state')?.value || ''
 
-  const adminUrl = req.nextUrl.origin + '/admin/entity-drives'
+  const adminUrl = req.nextUrl.origin + '/settings/drive'
 
   if (error) {
     return NextResponse.redirect(adminUrl + '?oauth_error=' + encodeURIComponent(error))
@@ -57,21 +58,31 @@ export async function GET(req: NextRequest) {
   })
   const userInfo = userInfoRes.ok ? await userInfoRes.json() : {}
 
+  // Identify the current logged-in Supabase user
+  const userClient = await createServerSupabaseClient()
+  const { data: { user } } = await userClient.auth.getUser()
+  if (!user) {
+    return NextResponse.redirect(req.nextUrl.origin + '/login?next=/settings/drive&oauth_error=session_expired_re_login')
+  }
+
   const supa = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL as string,
     process.env.SUPABASE_SERVICE_ROLE_KEY as string
   )
 
   const patch: Bag = {
+    user_id: user.id,
+    entity,
     user_oauth_refresh_token: tokens.refresh_token,
     user_oauth_access_token: tokens.access_token,
     user_oauth_expires_at: new Date(Date.now() + (tokens.expires_in || 3600) * 1000).toISOString(),
-    service_account_email: userInfo.email || null,
+    user_oauth_email: userInfo.email || null,
     test_connection_ok: null,
     test_connection_at: null,
     test_connection_error: null,
   }
-  await supa.from('entity_drive_configs').update(patch).eq('entity', entity)
+  // Upsert on (user_id, entity)
+  await supa.from('user_drive_configs').upsert(patch, { onConflict: 'user_id,entity' })
 
   const res = NextResponse.redirect(adminUrl + '?connected=' + entity)
   res.cookies.delete('oauth_state')

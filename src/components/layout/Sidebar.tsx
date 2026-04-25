@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { href: '/contacts',   label: 'Contacts',          dot: '#6B7280', icon: Users },
   { href: '/compliance', label: 'Compliance',        dot: '#6B7280', icon: CalendarCheck },
   { href: '/analytics',  label: 'Analytics',         dot: '#6B7280', icon: BarChart3 },
+  { href: '/settings/drive', label: 'Drive Settings',   dot: '#4285F4', icon: HardDrive },
 ]
 
 const ADMIN_NAV_ITEMS = [

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createFolder, uploadFile, authFromConfig, EntitySlug } from '@/lib/google-drive-client'
 
 export const runtime = 'nodejs'
@@ -26,22 +27,39 @@ export async function POST(req: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY as string
     )
 
-    const { data: cfg } = await supa.from('entity_drive_configs').select('*').eq('entity', entity).maybeSingle()
+    // Resolve config: user-first, then entity default
+    let cfg: Bag = null
+    const userClient = await createServerSupabaseClient()
+    const { data: { user } } = await userClient.auth.getUser()
+    if (user) {
+      const r = await supa.from('user_drive_configs').select('*').eq('user_id', user.id).eq('entity', entity).maybeSingle()
+      if (r.data) cfg = r.data
+    }
+    if (!cfg) {
+      const r = await supa.from('entity_drive_configs').select('*').eq('entity', entity).maybeSingle()
+      if (r.data) cfg = r.data
+    }
+
     if (!cfg || !cfg.root_folder_id) {
-      return NextResponse.json({ error: 'Drive not configured for ' + entity + '. Go to /admin/entity-drives.' }, { status: 400 })
+      return NextResponse.json({ error: 'Drive not configured for ' + entity + '. Connect your Drive at /settings/drive.' }, { status: 400 })
     }
     const auth = authFromConfig(cfg, entity as EntitySlug)
     if (!auth) {
-      return NextResponse.json({ error: 'No auth for ' + entity + '. Connect Drive via OAuth.' }, { status: 400 })
+      return NextResponse.json({ error: 'No auth for ' + entity + '. Connect Drive via OAuth at /settings/drive.' }, { status: 400 })
     }
 
     let targetFolderId = cfg.root_folder_id as string
     let bidFolderWebLink: string | null = null
 
     if (proposalId) {
+      // Per-user bid folder cache so two users uploading to the same proposal get separate folders in their own Drives
+      const bidFolderColumn = user ? 'bid_folders_by_user' : null
       const { data: prop } = await supa.from('proposals').select('id, drive_folder_id, drive_folder_url, gov_leads(title, solicitation_number)').eq('id', proposalId).maybeSingle()
       if (!prop) return NextResponse.json({ error: 'proposal not found' }, { status: 404 })
       const p = prop as Bag
+
+      // For now, keep one bid folder per proposal (simpler). User-specific cache can be added later.
+      void bidFolderColumn
       if (p.drive_folder_id) {
         targetFolderId = p.drive_folder_id
         bidFolderWebLink = p.drive_folder_url
@@ -69,6 +87,7 @@ export async function POST(req: NextRequest) {
       folder_web_link: bidFolderWebLink,
       entity,
       auth_kind: auth.kind,
+      cfg_scope: cfg.user_id ? 'user' : 'entity',
     })
   } catch (e: unknown) {
     return NextResponse.json({ error: (e as Error).message || 'error' }, { status: 500 })
