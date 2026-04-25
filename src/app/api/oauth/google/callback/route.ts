@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-
-// GET /api/oauth/google/callback?code=...&state=entity:nonce
-// Google redirects here after the user clicks Allow on the consent screen.
-// We exchange the code for a refresh token and persist it to entity_drive_configs.
+import { getOAuthCredsForEntity, EntitySlug } from '@/lib/google-drive-client'
 
 export const runtime = 'nodejs'
 
@@ -31,10 +28,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(adminUrl + '?oauth_error=invalid_entity')
   }
 
-  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID
-  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET
+  const { clientId, clientSecret } = getOAuthCredsForEntity(entity as EntitySlug)
   if (!clientId || !clientSecret) {
-    return NextResponse.redirect(adminUrl + '?oauth_error=oauth_not_configured')
+    return NextResponse.redirect(adminUrl + '?oauth_error=oauth_not_configured_for_' + entity)
   }
 
   const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
@@ -56,7 +52,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(adminUrl + '?oauth_error=no_refresh_token_check_consent_screen_test_users')
   }
 
-  // Identify the connected Google user
   const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
     headers: { Authorization: 'Bearer ' + tokens.access_token },
   })

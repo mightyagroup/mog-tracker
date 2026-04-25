@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { listFilesInFolder, authFromConfig } from '@/lib/google-drive-client'
+import { listFilesInFolder, authFromConfig, EntitySlug } from '@/lib/google-drive-client'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     if (!cfg) return NextResponse.json({ error: 'No config for ' + entity }, { status: 404 })
 
-    const auth = authFromConfig(cfg)
+    const auth = authFromConfig(cfg, entity as EntitySlug)
     if (!auth) return NextResponse.json({ error: 'No auth saved (connect Drive via OAuth or paste a service account JSON)' }, { status: 400 })
     if (!cfg.root_folder_id) return NextResponse.json({ error: 'No root folder ID saved' }, { status: 400 })
 

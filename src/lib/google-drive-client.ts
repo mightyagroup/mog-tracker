@@ -1,6 +1,6 @@
 // Google Drive client supporting BOTH service account JWT auth AND OAuth refresh
-// tokens. OAuth is preferred for Workspace orgs that disable service account key
-// creation. Service account is kept as a fallback for environments that allow it.
+// tokens. OAuth credentials are resolved PER ENTITY so each entity can have its own
+// Google Cloud OAuth client (matching how each entity has its own Cloud org).
 
 import crypto from 'node:crypto'
 
@@ -11,16 +11,32 @@ export type ServiceAccountJson = {
   project_id?: string
 }
 
-export type OAuthCreds = {
-  refresh_token: string
-}
+export type EntitySlug = 'exousia' | 'vitalx' | 'ironhouse'
 
 export type DriveAuth =
   | { kind: 'service_account', sa: ServiceAccountJson }
-  | { kind: 'oauth', oauth: OAuthCreds }
+  | { kind: 'oauth', refresh_token: string, entity: EntitySlug }
 
 function b64url(buf: Buffer): string {
   return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
+}
+
+/**
+ * Resolve the (clientId, clientSecret) pair for a given entity. Tries entity-specific
+ * env vars first (preferred), falls back to the generic GOOGLE_OAUTH_CLIENT_ID/SECRET
+ * so a single shared client still works during migration.
+ */
+export function getOAuthCredsForEntity(entity: EntitySlug): { clientId: string; clientSecret: string } {
+  const upper = entity.toUpperCase()
+  const clientId =
+    process.env['GOOGLE_OAUTH_CLIENT_ID_' + upper] ||
+    process.env.GOOGLE_OAUTH_CLIENT_ID ||
+    ''
+  const clientSecret =
+    process.env['GOOGLE_OAUTH_CLIENT_SECRET_' + upper] ||
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET ||
+    ''
+  return { clientId, clientSecret }
 }
 
 async function getAccessTokenFromServiceAccount(sa: ServiceAccountJson): Promise<string> {
@@ -55,17 +71,18 @@ async function getAccessTokenFromServiceAccount(sa: ServiceAccountJson): Promise
   return j.access_token as string
 }
 
-async function getAccessTokenFromOAuth(creds: OAuthCreds): Promise<string> {
-  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID
-  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET
-  if (!clientId || !clientSecret) throw new Error('GOOGLE_OAUTH_CLIENT_ID/SECRET not set')
+async function getAccessTokenFromOAuth(refreshToken: string, entity: EntitySlug): Promise<string> {
+  const { clientId, clientSecret } = getOAuthCredsForEntity(entity)
+  if (!clientId || !clientSecret) {
+    throw new Error('OAuth client not configured for ' + entity + '. Set GOOGLE_OAUTH_CLIENT_ID_' + entity.toUpperCase() + ' and GOOGLE_OAUTH_CLIENT_SECRET_' + entity.toUpperCase() + ' (or the generic fallbacks).')
+  }
   const r = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       client_id: clientId,
       client_secret: clientSecret,
-      refresh_token: creds.refresh_token,
+      refresh_token: refreshToken,
       grant_type: 'refresh_token',
     }),
   })
@@ -75,17 +92,17 @@ async function getAccessTokenFromOAuth(creds: OAuthCreds): Promise<string> {
 }
 
 async function getAccessToken(auth: DriveAuth): Promise<string> {
-  if (auth.kind === 'oauth') return getAccessTokenFromOAuth(auth.oauth)
+  if (auth.kind === 'oauth') return getAccessTokenFromOAuth(auth.refresh_token, auth.entity)
   return getAccessTokenFromServiceAccount(auth.sa)
 }
 
 /** Pick the right auth from a saved entity_drive_configs row. OAuth wins when present. */
-export function authFromConfig(cfg: {
-  service_account_json?: ServiceAccountJson | null
-  user_oauth_refresh_token?: string | null
-}): DriveAuth | null {
+export function authFromConfig(
+  cfg: { service_account_json?: ServiceAccountJson | null; user_oauth_refresh_token?: string | null },
+  entity: EntitySlug
+): DriveAuth | null {
   if (cfg.user_oauth_refresh_token) {
-    return { kind: 'oauth', oauth: { refresh_token: cfg.user_oauth_refresh_token } }
+    return { kind: 'oauth', refresh_token: cfg.user_oauth_refresh_token, entity }
   }
   if (cfg.service_account_json) {
     return { kind: 'service_account', sa: cfg.service_account_json }

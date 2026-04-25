@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'node:crypto'
-
-// GET /api/oauth/google/start?entity=exousia
-// Generates a Google OAuth consent URL and redirects the browser there.
-// State token is stored in an HTTP-only cookie and validated by the callback.
+import { getOAuthCredsForEntity, EntitySlug } from '@/lib/google-drive-client'
 
 export const runtime = 'nodejs'
 
@@ -14,9 +11,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'invalid entity' }, { status: 400 })
   }
 
-  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID
+  const { clientId } = getOAuthCredsForEntity(entity as EntitySlug)
   if (!clientId) {
-    return NextResponse.json({ error: 'GOOGLE_OAUTH_CLIENT_ID not set in Vercel env' }, { status: 500 })
+    return NextResponse.json({
+      error: 'No OAuth client configured for ' + entity + '. Set GOOGLE_OAUTH_CLIENT_ID_' + entity.toUpperCase() + ' (preferred) or GOOGLE_OAUTH_CLIENT_ID (fallback) in Vercel.'
+    }, { status: 500 })
   }
 
   const redirectUri = req.nextUrl.origin + '/api/oauth/google/callback'
