@@ -148,9 +148,11 @@ function parseEvaListing(html: string): EvaOpportunity[] {
 }
 
 // Apply NAICS-based entity routing + write to gov_leads
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SupaClient = any
 async function ingestEvaOpportunities(
   opps: EvaOpportunity[],
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupaClient,
   categories: ServiceCategory[],
   dryRun: boolean,
 ): Promise<{ inserted: number; updated: number; skipped: number; errors: string[] }> {
