@@ -69,7 +69,7 @@ export async function middleware(request: NextRequest) {
     if (!allowed) {
       return new NextResponse(JSON.stringify({ error: 'Too many requests' }), {
         status: 429,
-        headers: { 'Content-Type': 'application/json', 'Retry-After': '60' },
+        headers: { 'Content-Type': 'application/json; charset=utf-8', 'Retry-After': '60' },
       })
     }
   }

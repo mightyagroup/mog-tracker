@@ -214,7 +214,8 @@ export function GovPricingCalculator({ govLeadId, initialData, onSave }: GovPric
     ]
 
     const csv = rows.map(row => row.map(cell => (typeof cell === 'string' ? `"${cell}"` : cell)).join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
+    // UTF-8 BOM forces Excel to interpret as UTF-8 (prevents â€" / Â mojibake on open)
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
