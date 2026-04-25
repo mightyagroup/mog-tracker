@@ -308,23 +308,35 @@ export async function GET(request: Request) {
   if (!skipScrape) {
     try {
       const r = await fetch(EVA_PUBLIC_URL, {
-        // Critical: identify ourselves to avoid bot blocks; eVA serves anonymous users
         headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; MOG-Tracker/1.0; +https://mog-tracker-app.vercel.app)',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'en-US,en;q=0.9',
         },
-        // Next.js: no caching for live data
         cache: 'no-store',
-        // 30-second timeout — cgieva.com can be slow
         signal: AbortSignal.timeout(30_000),
       })
-      if (!r.ok) {
+
+      // AWS WAF challenge detection — eVA sits behind awselb/2.0 + WAF.
+      // The data table is JavaScript-rendered via a protected endpoint, so a
+      // raw HTTP fetch never sees the rows. We detect both the challenge
+      // header and the case where the static HTML returns 0 tables/rows.
+      const wafHeader = r.headers.get('x-amzn-waf-action')
+      if (wafHeader === 'challenge') {
+        scrapeError = 'eVA blocked by AWS WAF challenge — programmatic scraping not possible. Use manual import (POST /api/cron/eva-feed) or eVA email notifications.'
+      } else if (!r.ok) {
         scrapeError = `eVA fetch ${r.status} ${r.statusText}`
       } else {
         const html = await r.text()
         opps = parseEvaListing(html)
         fetched = opps.length
+        if (fetched === 0) {
+          // The page loaded but rows are JS-rendered — confirm via heuristic.
+          const hasTables = /<table[^>]*>/i.test(html)
+          if (!hasTables) {
+            scrapeError = 'eVA returned 0 opportunity rows — data is JavaScript-rendered behind AWS WAF. Listing page does not include table HTML at request time. Use manual import or rely on SAM.gov + email notifications.'
+          }
+        }
       }
     } catch (e) {
       scrapeError = `eVA fetch failed: ${String(e)}`
