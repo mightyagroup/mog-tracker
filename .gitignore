@@ -39,6 +39,7 @@ next-env.d.ts
 .tmp/
 CLAUDE.md
 
-# Bid templates — proprietary source files + work-in-progress tokenized output.
-# Once tokenized templates are clean and verified, narrow this rule to just /source/
-src/lib/bid-templates/
+# Bid templates — proprietary source files + binary tokenized output.
+# Audit and token map are committed (text); binary templates live in Supabase Storage.
+src/lib/bid-templates/source/
+src/lib/bid-templates/tokenized/

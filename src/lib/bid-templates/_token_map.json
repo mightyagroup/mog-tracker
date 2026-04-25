@@ -1,0 +1,1228 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-04-25T23:36:52.050814",
+  "description": "Token map for MOG Tracker Bid Starter templates. Each token maps to a value source. The doc generator (src/lib/bid-templates/generator.ts) uses this map to fill {{TOKEN}} placeholders.",
+  "token_definitions": {
+    "ADDITIONAL_RISKS_BLOCK": {
+      "type": "block",
+      "source": "manual",
+      "description": "Additional risks (manual fill)"
+    },
+    "CLIN_0001_DESCRIPTION": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "CLIN 0001 description (base period)"
+    },
+    "CLIN_OY1_DESCRIPTION": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "CLIN Option Year 1 description"
+    },
+    "CLIN_OY2_DESCRIPTION": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "CLIN Option Year 2 description"
+    },
+    "CLIN_OY3_DESCRIPTION": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "CLIN Option Year 3 description"
+    },
+    "CLIN_OY4_DESCRIPTION": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "CLIN Option Year 4 description"
+    },
+    "CLOSED_RISKS_BLOCK": {
+      "type": "block",
+      "source": "manual",
+      "description": "Closed risks (manual fill)"
+    },
+    "COMPETITIVE_ASSESSMENT_TABLE": {
+      "type": "block",
+      "source": "usaspending_lookup",
+      "description": "Competitive assessment table"
+    },
+    "COMPETITIVE_POSITIONING_NARRATIVE": {
+      "type": "string",
+      "source": "manual",
+      "description": "Competitive positioning narrative"
+    },
+    "COMPLIANCE_MATRIX_BLOCK": {
+      "type": "block",
+      "source": "solicitation_parser",
+      "description": "Section L/M compliance items"
+    },
+    "CO_EMAIL": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Contracting Officer email"
+    },
+    "CO_NAME": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Contracting Officer name"
+    },
+    "CO_PHONE": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Contracting Officer phone"
+    },
+    "CO_TITLE": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Contracting Officer title"
+    },
+    "DIFFERENTIATOR_1": {
+      "type": "string",
+      "source": "manual",
+      "description": "Differentiator 1"
+    },
+    "DIFFERENTIATOR_2": {
+      "type": "string",
+      "source": "manual",
+      "description": "Differentiator 2"
+    },
+    "DIFFERENTIATOR_3": {
+      "type": "string",
+      "source": "manual",
+      "description": "Differentiator 3"
+    },
+    "ENTITY_ADDRESS_PRIMARY": {
+      "type": "string",
+      "source": "address-protocol.addressFor(docType)",
+      "description": "Address (Wild Orchid for federal, Culpeper for non-federal)"
+    },
+    "ENTITY_ADDRESS_REMITTANCE": {
+      "type": "string",
+      "source": "address-protocol Culpeper",
+      "description": "Always Culpeper for invoicing/remittance"
+    },
+    "ENTITY_BUSINESS_TYPE": {
+      "type": "string",
+      "source": "entity_data.certifications",
+      "description": "Small business / WOSB / etc."
+    },
+    "ENTITY_CAGE": {
+      "type": "string",
+      "source": "entity_data.cageCode",
+      "description": "CAGE code (5-char DLA ID)"
+    },
+    "ENTITY_NAICS_PRIMARY": {
+      "type": "string",
+      "source": "entity_data.naicsCodes[primary]",
+      "description": "Primary NAICS code"
+    },
+    "ENTITY_NAME": {
+      "type": "string",
+      "source": "entity_data.legalName",
+      "description": "Legal entity name (e.g., \"Exousia Solutions LLC\")"
+    },
+    "ENTITY_NAME_UPPER": {
+      "type": "string",
+      "source": "entity_data.legalName.toUpperCase()",
+      "description": "Legal entity name in uppercase"
+    },
+    "ENTITY_PAST_PERFORMANCE_AREA": {
+      "type": "string",
+      "source": "entity_data.pastPerformance[0].scope",
+      "description": "Domain of past performance"
+    },
+    "ENTITY_PAST_PERFORMANCE_NOTE": {
+      "type": "string",
+      "source": "entity_data.pastPerformance[0]",
+      "description": "Brief past performance reference"
+    },
+    "ENTITY_PHONE": {
+      "type": "string",
+      "source": "entity_data.phone",
+      "description": "Phone number"
+    },
+    "ENTITY_PROPOSAL_LEAD": {
+      "type": "string",
+      "source": "entity_data.proposalLead",
+      "description": "Proposal lead name (e.g., \"Emmanuela Wireko-Brobbey\")"
+    },
+    "ENTITY_PROPOSAL_LEAD_TITLE": {
+      "type": "string",
+      "source": "entity_data.proposalLeadTitle",
+      "description": "Proposal lead title"
+    },
+    "ENTITY_PUBLIC_EMAIL": {
+      "type": "string",
+      "source": "entity_data.publicEmail",
+      "description": "Public-facing email (info@ or sales@)"
+    },
+    "ENTITY_SAM_EMAIL": {
+      "type": "string",
+      "source": "entity_data.samEmail",
+      "description": "SAM.gov registered admin email"
+    },
+    "ENTITY_UEI": {
+      "type": "string",
+      "source": "entity_data.uei",
+      "description": "Unique Entity Identifier (12-char SAM.gov ID)"
+    },
+    "ESTIMATE_HIGH_RANGE": {
+      "type": "string",
+      "source": "usaspending_lookup",
+      "description": "High-end value estimate"
+    },
+    "ESTIMATE_MID_RANGE": {
+      "type": "string",
+      "source": "usaspending_lookup",
+      "description": "Mid-range value estimate"
+    },
+    "GAME_PLAN_RATIONALE": {
+      "type": "string",
+      "source": "manual",
+      "description": "Game plan rationale"
+    },
+    "INSURANCE_AUTO_REQ": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Auto liability requirement"
+    },
+    "INSURANCE_GL_REQ": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "General liability requirement"
+    },
+    "INSURANCE_WORKERS_COMP_REQ": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Workers' comp requirement"
+    },
+    "KO_CONTACT_SPECIALIST_EMAIL": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Contract specialist email"
+    },
+    "KO_CONTACT_SPECIALIST_NAME": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Contract specialist name"
+    },
+    "KO_CONTRACTING_OFFICER_NAME": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Alt contracting officer name"
+    },
+    "LABOR_BREAKDOWN_TABLE": {
+      "type": "block",
+      "source": "solicitation_parser",
+      "description": "Labor breakdown table"
+    },
+    "MARGIN_ASSUMPTION": {
+      "type": "string",
+      "source": "manual",
+      "description": "Margin assumption"
+    },
+    "NEAREST_REGIONAL_HUB_MIN": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Distance to nearest hub in minutes"
+    },
+    "PRICING_APPROACH": {
+      "type": "string",
+      "source": "manual",
+      "description": "Pricing approach"
+    },
+    "PRIMARY_LOSS_RISK": {
+      "type": "string",
+      "source": "usaspending_lookup",
+      "description": "Primary loss risk"
+    },
+    "PRIMARY_WIN_DRIVER": {
+      "type": "string",
+      "source": "usaspending_lookup",
+      "description": "Primary win driver"
+    },
+    "PRIOR_AWARDS_TABLE": {
+      "type": "block",
+      "source": "usaspending_lookup",
+      "description": "Prior awards from USASpending"
+    },
+    "REGIONAL_HUB_CITY": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Regional hub city"
+    },
+    "RETURN_BY_DATE": {
+      "type": "date",
+      "source": "computed",
+      "description": "Sub return-by date (deadline minus 2 days)"
+    },
+    "RETURN_BY_DATE_FRIENDLY": {
+      "type": "string",
+      "source": "computed",
+      "description": "Sub return-by friendly format"
+    },
+    "RETURN_BY_DATE_SHORT": {
+      "type": "string",
+      "source": "computed",
+      "description": "Sub return-by short format"
+    },
+    "SECTION_L_M_CROSSWALK_TABLE": {
+      "type": "block",
+      "source": "solicitation_parser",
+      "description": "Section L/M cross-walk for technical proposal"
+    },
+    "SOL_AGENCY": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Agency name (e.g., U.S. Army Corps of Engineers)"
+    },
+    "SOL_AGENCY_ABBREV": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Agency abbreviation (e.g., USACE)"
+    },
+    "SOL_AMENDMENT_CHECK_DATE": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Last amendment check date"
+    },
+    "SOL_AMENDMENT_PENDING": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Amendment status placeholder"
+    },
+    "SOL_AWARD_AMOUNT": {
+      "type": "number",
+      "source": "solicitation_parser",
+      "description": "Award amount (post-award)"
+    },
+    "SOL_BASE_PERIOD": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Base period of performance"
+    },
+    "SOL_BASE_PERIOD_FRIENDLY": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Base period in friendly date format"
+    },
+    "SOL_BASE_PERIOD_RANGE": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Base period as month/year range"
+    },
+    "SOL_CLIN_COUNT": {
+      "type": "number",
+      "source": "solicitation_parser",
+      "description": "Number of CLINs"
+    },
+    "SOL_CLIN_TABLE": {
+      "type": "block",
+      "source": "solicitation_parser",
+      "description": "CLIN-based pricing table \u2014 generator builds rows"
+    },
+    "SOL_CONTRACT_TERM_DESCRIPTION": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Contract term description"
+    },
+    "SOL_CONTRACT_TYPE": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Contract type (FFP, T&M, IDIQ, etc.)"
+    },
+    "SOL_EQUIPMENT_REQUIREMENTS": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Equipment bulleted"
+    },
+    "SOL_ESTIMATED_VALUE": {
+      "type": "number",
+      "source": "solicitation_parser",
+      "description": "Estimated contract value"
+    },
+    "SOL_EVALUATION_FACTORS": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Section M factors"
+    },
+    "SOL_EVALUATION_METHOD": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Evaluation method (e.g., LPTA, Best Value)"
+    },
+    "SOL_FACILITY_AND_LOCATION": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Facility name + location"
+    },
+    "SOL_FACILITY_NAME": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Specific federal facility (internal docs only)"
+    },
+    "SOL_FAR_CLAUSES": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "FAR clauses cited"
+    },
+    "SOL_FILE_NAMING": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Required file naming convention"
+    },
+    "SOL_FINAL_PERFORMANCE_END_DATE": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Final end date including options"
+    },
+    "SOL_GENERIC_AREA_1": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "OPSEC-safe area 1"
+    },
+    "SOL_GENERIC_LOCATION": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "OPSEC-safe location (city/state only)"
+    },
+    "SOL_GENERIC_PROJECT_AREA": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "OPSEC-safe project area"
+    },
+    "SOL_GENERIC_WORK_AREAS": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "OPSEC-safe list of work areas"
+    },
+    "SOL_INCUMBENT_CONTRACTOR": {
+      "type": "string",
+      "source": "usaspending_lookup",
+      "description": "Incumbent contractor name"
+    },
+    "SOL_INSURANCE_REQUIREMENTS": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Insurance bulleted"
+    },
+    "SOL_LOCATION_CITY": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "City of performance"
+    },
+    "SOL_LOCATION_CITY_STATE": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "City, State"
+    },
+    "SOL_LOCATION_CITY_STATE_ZIP": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "City, State ZIP"
+    },
+    "SOL_LOCATION_COUNTY_STATE": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "County, State"
+    },
+    "SOL_LOCATION_STATE": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "State of performance (full name)"
+    },
+    "SOL_LOCATION_STATE_ABBREV": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "State abbreviation"
+    },
+    "SOL_NAICS": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "NAICS code"
+    },
+    "SOL_NAICS_DESCRIPTION": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "NAICS description"
+    },
+    "SOL_NOTICE_ID": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "SAM.gov notice ID"
+    },
+    "SOL_NUMBER": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Solicitation number (e.g., W912BV26QA047)"
+    },
+    "SOL_OPTION_YEARS": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Option years description"
+    },
+    "SOL_PERFORMANCE_START_DATE": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Performance start date"
+    },
+    "SOL_PERFORMANCE_START_MONTH_YEAR": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Performance start month and year"
+    },
+    "SOL_PLACE_OF_PERFORMANCE": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Place of performance (full)"
+    },
+    "SOL_PRICING_TOTAL_FORMATTED": {
+      "type": "string",
+      "source": "pricing_calculator",
+      "description": "Total formatted with cents"
+    },
+    "SOL_PRICING_TOTAL_FORMATTED_SHORT": {
+      "type": "string",
+      "source": "pricing_calculator",
+      "description": "Total formatted short"
+    },
+    "SOL_PSC_CODE": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Product Service Code"
+    },
+    "SOL_QUESTIONS_DEADLINE": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Questions deadline"
+    },
+    "SOL_REQUIRED_LICENSES": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Required licenses bulleted"
+    },
+    "SOL_REQUIRED_LICENSE_AUTHORITY": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Issuing authority for required license"
+    },
+    "SOL_REQUIRED_LICENSE_NAME": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Single primary required license"
+    },
+    "SOL_RESEARCH_PENDING": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Research pending placeholder"
+    },
+    "SOL_RESPONSE_DEADLINE": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Response deadline (full)"
+    },
+    "SOL_RESPONSE_DEADLINE_DATE_ONLY": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Response deadline date only"
+    },
+    "SOL_RESPONSE_DEADLINE_FRIENDLY": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Response deadline in friendly format"
+    },
+    "SOL_SAFETY_REQUIREMENTS": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Safety bulleted"
+    },
+    "SOL_SAM_URL": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "SAM.gov listing URL"
+    },
+    "SOL_SCOPE_GENERIC_DESCRIPTION": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "OPSEC-safe scope (no agency/sol#)"
+    },
+    "SOL_SCOPE_SUMMARY": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "1-paragraph scope summary"
+    },
+    "SOL_SEASON_RANGE": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Mowing/peak season range"
+    },
+    "SOL_SET_ASIDE": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Set-aside type"
+    },
+    "SOL_SITE_1": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Specific site 1 (internal only)"
+    },
+    "SOL_SITE_2": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Specific site 2 (internal only)"
+    },
+    "SOL_SITE_3": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Specific site 3 (internal only)"
+    },
+    "SOL_SITE_VISIT_DATE": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Site visit date"
+    },
+    "SOL_SIZE_STANDARD": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "SBA size standard"
+    },
+    "SOL_SUBMISSION_METHOD": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "How to submit"
+    },
+    "SOL_SUBMISSION_REQUIREMENTS": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Section L items"
+    },
+    "SOL_SUB_AGENCY": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Sub-agency / district (e.g., Wilmington District)"
+    },
+    "SOL_TITLE": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Solicitation title"
+    },
+    "SOL_WORK_HOURS": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Allowed work hours"
+    },
+    "SOL_WORK_LOCATIONS": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Work locations bulleted"
+    },
+    "SOL_WORK_SITE_1": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Sub-facing work site 1 (sanitized)"
+    },
+    "SOL_WORK_SITE_2": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Sub-facing work site 2 (sanitized)"
+    },
+    "SOL_WORK_SITE_3": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Sub-facing work site 3 (sanitized)"
+    },
+    "SUB_CANDIDATES_BLOCK": {
+      "type": "block",
+      "source": "subcontractor_search",
+      "description": "Subcontractor candidates table 1"
+    },
+    "SUB_CANDIDATES_BLOCK_2": {
+      "type": "block",
+      "source": "subcontractor_search",
+      "description": "Subcontractor candidates table 2"
+    },
+    "SUB_CANDIDATES_BLOCK_3": {
+      "type": "block",
+      "source": "subcontractor_search",
+      "description": "Subcontractor candidates table 3"
+    },
+    "SUB_CANDIDATES_BLOCK_4": {
+      "type": "block",
+      "source": "subcontractor_search",
+      "description": "Subcontractor candidates table 4"
+    },
+    "SUB_COMPANY_NAME": {
+      "type": "string",
+      "source": "subcontractor_search",
+      "description": "Sub legal company name"
+    },
+    "SUB_CONTACT_NAME": {
+      "type": "string",
+      "source": "subcontractor_search",
+      "description": "Sub primary contact"
+    },
+    "SUB_EMAIL": {
+      "type": "string",
+      "source": "subcontractor_search",
+      "description": "Sub email"
+    },
+    "SUB_FIRST_NAME": {
+      "type": "string",
+      "source": "subcontractor_search",
+      "description": "Sub primary first name (for greeting)"
+    },
+    "SUB_LICENSE_EXPIRY": {
+      "type": "string",
+      "source": "subcontractor_search",
+      "description": "Sub license expiry"
+    },
+    "SUB_LICENSE_FILE": {
+      "type": "string",
+      "source": "subcontractor_search",
+      "description": "Sub license filename"
+    },
+    "SUB_LICENSE_NAME": {
+      "type": "string",
+      "source": "subcontractor_search",
+      "description": "Sub license name"
+    },
+    "SUB_NAME": {
+      "type": "string",
+      "source": "subcontractor_search",
+      "description": "Sub company short name"
+    },
+    "SUB_PHONE": {
+      "type": "string",
+      "source": "subcontractor_search",
+      "description": "Sub phone"
+    },
+    "SUB_SOW_TITLE": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Brief SOW title (e.g., \"Mowing Services\")"
+    },
+    "SUPPLIES_MONTHLY_RANGE": {
+      "type": "string",
+      "source": "manual",
+      "description": "Monthly supplies cost range"
+    },
+    "TARGET_PRICE_RANGE": {
+      "type": "string",
+      "source": "usaspending_lookup",
+      "description": "Target bid price range"
+    },
+    "TEAMING_LOI_STATUS": {
+      "type": "string",
+      "source": "manual",
+      "description": "LOI status"
+    },
+    "TEAMING_PARTNER_BACKUP": {
+      "type": "string",
+      "source": "manual",
+      "description": "Backup teaming partner"
+    },
+    "TEAMING_PARTNER_LOCATION": {
+      "type": "string",
+      "source": "manual",
+      "description": "Teaming partner location"
+    },
+    "TEAMING_PARTNER_NAME": {
+      "type": "string",
+      "source": "manual",
+      "description": "Teaming partner full name"
+    },
+    "TEAMING_PARTNER_ROLE": {
+      "type": "string",
+      "source": "manual",
+      "description": "Teaming partner role"
+    },
+    "TEAMING_PARTNER_SHORT": {
+      "type": "string",
+      "source": "manual",
+      "description": "Teaming partner short name"
+    },
+    "TEAMING_STRATEGY_NARRATIVE": {
+      "type": "string",
+      "source": "manual",
+      "description": "Teaming strategy narrative"
+    },
+    "TECHNICAL_EQUIPMENT_NARRATIVE": {
+      "type": "string",
+      "source": "ai_drafted",
+      "description": "Equipment narrative"
+    },
+    "TECHNICAL_MANAGEMENT_NARRATIVE": {
+      "type": "string",
+      "source": "ai_drafted",
+      "description": "Management narrative"
+    },
+    "TECHNICAL_PAST_PERFORMANCE_NARRATIVE": {
+      "type": "string",
+      "source": "entity_data",
+      "description": "Past performance narrative"
+    },
+    "TECHNICAL_QC_NARRATIVE": {
+      "type": "string",
+      "source": "entity_data",
+      "description": "QC narrative (uses entity boilerplate)"
+    },
+    "TECHNICAL_SAFETY_NARRATIVE": {
+      "type": "string",
+      "source": "entity_data",
+      "description": "Safety narrative (uses entity boilerplate)"
+    },
+    "TECHNICAL_SCHEDULE_NARRATIVE": {
+      "type": "string",
+      "source": "ai_drafted",
+      "description": "Schedule narrative"
+    },
+    "TECHNICAL_SERVICE_DELIVERY_NARRATIVE": {
+      "type": "string",
+      "source": "ai_drafted",
+      "description": "Service delivery narrative"
+    },
+    "TECHNICAL_STAFFING_NARRATIVE": {
+      "type": "string",
+      "source": "ai_drafted",
+      "description": "Staffing narrative"
+    },
+    "TECHNICAL_SUBCONTRACTOR_NARRATIVE": {
+      "type": "string",
+      "source": "ai_drafted",
+      "description": "Subcontractor approach narrative"
+    },
+    "TECHNICAL_TRANSITION_NARRATIVE": {
+      "type": "string",
+      "source": "ai_drafted",
+      "description": "Transition narrative"
+    },
+    "TODAY_DATE": {
+      "type": "date",
+      "source": "computed",
+      "description": "Today YYYY-MM-DD"
+    },
+    "TODAY_MONTH_YEAR": {
+      "type": "string",
+      "source": "computed",
+      "description": "Month and Year (e.g., April 2026)"
+    },
+    "TODO_OPEN_ITEMS_BLOCK": {
+      "type": "block",
+      "source": "manual",
+      "description": "Open todo items (manual fill)"
+    },
+    "TOP_RISK_1": {
+      "type": "string",
+      "source": "manual",
+      "description": "Top risk 1"
+    },
+    "TOP_RISK_2": {
+      "type": "string",
+      "source": "manual",
+      "description": "Top risk 2"
+    },
+    "TOP_RISK_3": {
+      "type": "string",
+      "source": "manual",
+      "description": "Top risk 3"
+    },
+    "WAGE_BASE_JANITOR": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Janitor base hourly rate"
+    },
+    "WAGE_BASE_JANITOR_RATE": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Janitor base rate (number-only)"
+    },
+    "WAGE_BASE_LABORER": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Laborer base hourly rate"
+    },
+    "WAGE_BASE_LABORER_RATE": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Laborer base rate (number-only)"
+    },
+    "WAGE_BASE_WINDOW": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Window cleaner rate"
+    },
+    "WAGE_DETERMINATION_LOCATION": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "WD locality"
+    },
+    "WAGE_DETERMINATION_NUMBER": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "WD number (e.g., WD 2015-4373 Rev 32)"
+    },
+    "WAGE_DETERMINATION_REVISION_DATE": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "WD revision date"
+    },
+    "WAGE_EQUIVALENT_RATES": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Equivalent WG rates"
+    },
+    "WAGE_EQUIV_FRINGE": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Equivalent fringe"
+    },
+    "WAGE_EQUIV_JANITOR": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Equivalent janitor rate"
+    },
+    "WAGE_FRINGE": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Fringe benefit rate"
+    },
+    "WAGE_FRINGE_EO13706": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Fringe under EO 13706"
+    },
+    "WAGE_FRINGE_RATE": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Fringe rate (number-only)"
+    },
+    "WAGE_KEY_RATES": {
+      "type": "string",
+      "source": "solicitation_parser",
+      "description": "Key wage rates summary"
+    },
+    "WAGE_LOADED_JANITOR": {
+      "type": "string",
+      "source": "computed",
+      "description": "Janitor loaded rate (wage + fringe)"
+    },
+    "WAGE_LOADED_LABORER": {
+      "type": "string",
+      "source": "computed",
+      "description": "Laborer loaded rate"
+    },
+    "WAGE_RATES_TABLE": {
+      "type": "block",
+      "source": "solicitation_parser",
+      "description": "Wage rates table (block placeholder)"
+    },
+    "WALK_AWAY_PRICE": {
+      "type": "string",
+      "source": "manual",
+      "description": "Walk-away floor price"
+    },
+    "WIN_PROBABILITY_CONFIDENCE": {
+      "type": "string",
+      "source": "usaspending_lookup",
+      "description": "Confidence level"
+    },
+    "WIN_PROBABILITY_RANGE": {
+      "type": "string",
+      "source": "usaspending_lookup",
+      "description": "Estimated win probability"
+    }
+  },
+  "tokens_per_template": {
+    "01_Contract_Intel_Sheet.docx": [
+      "CLIN_0001_DESCRIPTION",
+      "CLIN_OY1_DESCRIPTION",
+      "CLIN_OY2_DESCRIPTION",
+      "CLIN_OY3_DESCRIPTION",
+      "CLIN_OY4_DESCRIPTION",
+      "CO_EMAIL",
+      "CO_NAME",
+      "CO_PHONE",
+      "KO_CONTACT_SPECIALIST_EMAIL",
+      "KO_CONTACT_SPECIALIST_NAME",
+      "SOL_AGENCY",
+      "SOL_AMENDMENT_PENDING",
+      "SOL_BASE_PERIOD",
+      "SOL_EVALUATION_METHOD",
+      "SOL_NAICS",
+      "SOL_NAICS_DESCRIPTION",
+      "SOL_NUMBER",
+      "SOL_OPTION_YEARS",
+      "SOL_PLACE_OF_PERFORMANCE",
+      "SOL_RESEARCH_PENDING",
+      "SOL_RESPONSE_DEADLINE",
+      "SOL_SET_ASIDE",
+      "SOL_SITE_1",
+      "SOL_SITE_2",
+      "SOL_SITE_3",
+      "SOL_SUBMISSION_METHOD",
+      "SOL_TITLE",
+      "WAGE_DETERMINATION_LOCATION",
+      "WAGE_DETERMINATION_NUMBER",
+      "WAGE_EQUIVALENT_RATES"
+    ],
+    "02_USASpending_Deep_Dive.docx": [
+      "COMPETITIVE_ASSESSMENT_TABLE",
+      "ENTITY_NAME",
+      "ENTITY_PAST_PERFORMANCE_AREA",
+      "ENTITY_PAST_PERFORMANCE_NOTE",
+      "ESTIMATE_HIGH_RANGE",
+      "ESTIMATE_MID_RANGE",
+      "SOL_FACILITY_NAME",
+      "SOL_LOCATION_CITY",
+      "SOL_LOCATION_STATE",
+      "SOL_LOCATION_STATE_ABBREV",
+      "SOL_NAICS",
+      "SOL_NUMBER",
+      "SOL_TITLE",
+      "TARGET_PRICE_RANGE",
+      "TEAMING_PARTNER_LOCATION",
+      "TEAMING_PARTNER_NAME",
+      "TEAMING_PARTNER_SHORT",
+      "WAGE_BASE_JANITOR",
+      "WAGE_DETERMINATION_NUMBER",
+      "WAGE_FRINGE",
+      "WAGE_FRINGE_EO13706",
+      "WAGE_RATES_TABLE",
+      "WIN_PROBABILITY_RANGE"
+    ],
+    "03_Wage_Determination.docx": [
+      "ENTITY_NAME",
+      "SOL_AGENCY",
+      "SOL_NUMBER",
+      "SOL_PLACE_OF_PERFORMANCE",
+      "SOL_SUB_AGENCY",
+      "SOL_TITLE",
+      "TODAY_DATE",
+      "WAGE_DETERMINATION_LOCATION",
+      "WAGE_DETERMINATION_NUMBER",
+      "WAGE_DETERMINATION_REVISION_DATE",
+      "WAGE_FRINGE",
+      "WAGE_FRINGE_EO13706",
+      "WAGE_RATES_TABLE"
+    ],
+    "04a_Proposal_Pricing.docx": [
+      "ENTITY_CAGE",
+      "ENTITY_NAME",
+      "ENTITY_PHONE",
+      "ENTITY_SAM_EMAIL",
+      "ENTITY_UEI",
+      "LABOR_BREAKDOWN_TABLE",
+      "SOL_AGENCY_ABBREV",
+      "SOL_CLIN_TABLE",
+      "SOL_LOCATION_CITY_STATE",
+      "SOL_NUMBER",
+      "SOL_PERFORMANCE_START_DATE",
+      "SOL_PLACE_OF_PERFORMANCE",
+      "SOL_TITLE",
+      "SUPPLIES_MONTHLY_RANGE",
+      "TEAMING_PARTNER_SHORT",
+      "TODAY_DATE",
+      "WAGE_DETERMINATION_LOCATION",
+      "WAGE_DETERMINATION_NUMBER"
+    ],
+    "04b_Proposal_Technical.docx": [
+      "ENTITY_CAGE",
+      "ENTITY_NAME",
+      "ENTITY_PROPOSAL_LEAD",
+      "ENTITY_PROPOSAL_LEAD_TITLE",
+      "ENTITY_UEI",
+      "SECTION_L_M_CROSSWALK_TABLE",
+      "SOL_BASE_PERIOD",
+      "SOL_NUMBER",
+      "SOL_OPTION_YEARS",
+      "SOL_PLACE_OF_PERFORMANCE",
+      "SOL_SCOPE_SUMMARY",
+      "SOL_TITLE",
+      "SOL_WORK_LOCATIONS",
+      "TECHNICAL_EQUIPMENT_NARRATIVE",
+      "TECHNICAL_MANAGEMENT_NARRATIVE",
+      "TECHNICAL_PAST_PERFORMANCE_NARRATIVE",
+      "TECHNICAL_QC_NARRATIVE",
+      "TECHNICAL_SAFETY_NARRATIVE",
+      "TECHNICAL_SCHEDULE_NARRATIVE",
+      "TECHNICAL_SERVICE_DELIVERY_NARRATIVE",
+      "TECHNICAL_STAFFING_NARRATIVE",
+      "TECHNICAL_SUBCONTRACTOR_NARRATIVE",
+      "TECHNICAL_TRANSITION_NARRATIVE",
+      "TODAY_DATE"
+    ],
+    "05_Subcontractor_Scope_of_Work.docx": [
+      "ENTITY_NAME",
+      "ENTITY_PHONE",
+      "ENTITY_PROPOSAL_LEAD",
+      "ENTITY_PUBLIC_EMAIL",
+      "RETURN_BY_DATE_FRIENDLY",
+      "SOL_BASE_PERIOD_FRIENDLY",
+      "SOL_FINAL_PERFORMANCE_END_DATE",
+      "SOL_GENERIC_LOCATION",
+      "SOL_GENERIC_PROJECT_AREA",
+      "SOL_LOCATION_CITY_STATE_ZIP",
+      "SOL_WORK_SITE_1",
+      "SOL_WORK_SITE_2",
+      "SOL_WORK_SITE_3"
+    ],
+    "06_Sub_Outreach_Email.docx": [
+      "ENTITY_NAME",
+      "ENTITY_PHONE",
+      "ENTITY_PROPOSAL_LEAD",
+      "ENTITY_PROPOSAL_LEAD_TITLE",
+      "ENTITY_PUBLIC_EMAIL",
+      "RETURN_BY_DATE_FRIENDLY",
+      "SOL_BASE_PERIOD_FRIENDLY",
+      "SOL_FINAL_PERFORMANCE_END_DATE",
+      "SOL_GENERIC_LOCATION",
+      "SOL_LOCATION_STATE",
+      "SOL_PERFORMANCE_START_DATE",
+      "SOL_SCOPE_GENERIC_DESCRIPTION",
+      "SUB_FIRST_NAME",
+      "SUB_SOW_TITLE"
+    ],
+    "07_Subcontractor_Search.docx": [
+      "NEAREST_REGIONAL_HUB_MIN",
+      "REGIONAL_HUB_CITY",
+      "RETURN_BY_DATE_SHORT",
+      "SOL_AGENCY",
+      "SOL_BASE_PERIOD_RANGE",
+      "SOL_LOCATION_CITY_STATE",
+      "SOL_NUMBER",
+      "SOL_PLACE_OF_PERFORMANCE",
+      "SOL_RESPONSE_DEADLINE_FRIENDLY",
+      "SUB_CANDIDATES_BLOCK",
+      "SUB_CANDIDATES_BLOCK_2",
+      "SUB_CANDIDATES_BLOCK_3",
+      "SUB_CANDIDATES_BLOCK_4"
+    ],
+    "08_Tracker_Workbook.xlsx": [
+      "ADDITIONAL_RISKS_BLOCK",
+      "COMPLIANCE_MATRIX_BLOCK",
+      "ENTITY_PROPOSAL_LEAD",
+      "SOL_AGENCY",
+      "SOL_BASE_PERIOD",
+      "SOL_CLIN_TABLE",
+      "SOL_CONTRACT_TYPE",
+      "SOL_ESTIMATED_VALUE",
+      "SOL_NAICS",
+      "SOL_NAICS_DESCRIPTION",
+      "SOL_NUMBER",
+      "SOL_OPTION_YEARS",
+      "SOL_PLACE_OF_PERFORMANCE",
+      "SOL_RESPONSE_DEADLINE",
+      "SOL_SET_ASIDE",
+      "SOL_SUB_AGENCY",
+      "SOL_TITLE",
+      "SUB_CANDIDATES_BLOCK",
+      "TARGET_PRICE_RANGE",
+      "TODAY_DATE",
+      "WALK_AWAY_PRICE"
+    ],
+    "09_To_Do_List.docx": [
+      "ENTITY_PROPOSAL_LEAD",
+      "RETURN_BY_DATE_FRIENDLY",
+      "SOL_NUMBER",
+      "SOL_REQUIRED_LICENSE_NAME",
+      "SOL_RESPONSE_DEADLINE_FRIENDLY",
+      "SOL_TITLE",
+      "TODAY_DATE",
+      "TODO_OPEN_ITEMS_BLOCK",
+      "WAGE_DETERMINATION_NUMBER"
+    ],
+    "10_Risk_Log.docx": [
+      "ADDITIONAL_RISKS_BLOCK",
+      "CLOSED_RISKS_BLOCK",
+      "ENTITY_PROPOSAL_LEAD",
+      "SOL_NUMBER",
+      "SOL_TITLE",
+      "TODAY_DATE"
+    ],
+    "11_Contract_Summary.docx": [
+      "CO_EMAIL",
+      "ENTITY_NAME_UPPER",
+      "SOL_AGENCY",
+      "SOL_BASE_PERIOD_FRIENDLY",
+      "SOL_FACILITY_AND_LOCATION",
+      "SOL_FINAL_PERFORMANCE_END_DATE",
+      "SOL_NUMBER",
+      "SOL_RESPONSE_DEADLINE_FRIENDLY",
+      "SOL_SITE_1",
+      "SOL_SITE_2",
+      "SOL_SITE_3",
+      "SOL_SUB_AGENCY",
+      "SOL_TITLE"
+    ],
+    "12_Game_Plan.docx": [
+      "COMPETITIVE_POSITIONING_NARRATIVE",
+      "DIFFERENTIATOR_1",
+      "DIFFERENTIATOR_2",
+      "DIFFERENTIATOR_3",
+      "ENTITY_PROPOSAL_LEAD",
+      "GAME_PLAN_RATIONALE",
+      "MARGIN_ASSUMPTION",
+      "PRICING_APPROACH",
+      "PRIMARY_LOSS_RISK",
+      "PRIMARY_WIN_DRIVER",
+      "SOL_NUMBER",
+      "SOL_RESPONSE_DEADLINE_FRIENDLY",
+      "SOL_TITLE",
+      "TARGET_PRICE_RANGE",
+      "TEAMING_LOI_STATUS",
+      "TEAMING_PARTNER_BACKUP",
+      "TEAMING_PARTNER_NAME",
+      "TEAMING_PARTNER_ROLE",
+      "TEAMING_STRATEGY_NARRATIVE",
+      "TODAY_DATE",
+      "TOP_RISK_1",
+      "TOP_RISK_2",
+      "TOP_RISK_3",
+      "WALK_AWAY_PRICE",
+      "WIN_PROBABILITY_CONFIDENCE",
+      "WIN_PROBABILITY_RANGE"
+    ],
+    "13_Submission_Checklist.docx": [
+      "CO_EMAIL",
+      "ENTITY_NAME",
+      "ENTITY_PUBLIC_EMAIL",
+      "KO_CONTACT_SPECIALIST_EMAIL",
+      "SOL_AMENDMENT_CHECK_DATE",
+      "SOL_CLIN_COUNT",
+      "SOL_NUMBER",
+      "SOL_PRICING_TOTAL_FORMATTED",
+      "SOL_PRICING_TOTAL_FORMATTED_SHORT",
+      "SOL_RESPONSE_DEADLINE_FRIENDLY",
+      "SUB_LICENSE_EXPIRY",
+      "SUB_LICENSE_FILE",
+      "SUB_LICENSE_NAME",
+      "SUB_NAME"
+    ],
+    "14_SIF_Subcontractor_Information_Form.docx": [
+      "ENTITY_NAME",
+      "ENTITY_NAME_UPPER",
+      "ENTITY_PHONE",
+      "ENTITY_SAM_EMAIL",
+      "INSURANCE_AUTO_REQ",
+      "INSURANCE_GL_REQ",
+      "INSURANCE_WORKERS_COMP_REQ",
+      "RETURN_BY_DATE_FRIENDLY",
+      "SOL_CONTRACT_TERM_DESCRIPTION",
+      "SOL_GENERIC_AREA_1",
+      "SOL_GENERIC_LOCATION",
+      "SOL_GENERIC_WORK_AREAS",
+      "SOL_NAICS",
+      "SOL_NAICS_DESCRIPTION",
+      "SOL_REQUIRED_LICENSE_AUTHORITY",
+      "SOL_REQUIRED_LICENSE_NAME",
+      "SOL_SCOPE_GENERIC_DESCRIPTION",
+      "SOL_SEASON_RANGE",
+      "SOL_SIZE_STANDARD",
+      "SOL_WORK_HOURS",
+      "SUB_COMPANY_NAME",
+      "SUB_CONTACT_NAME",
+      "SUB_EMAIL",
+      "SUB_FIRST_NAME",
+      "SUB_PHONE",
+      "SUB_SOW_TITLE",
+      "TODAY_MONTH_YEAR"
+    ]
+  }
+}
