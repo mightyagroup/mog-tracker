@@ -58,7 +58,6 @@ export async function GET(req: NextRequest) {
   })
   const userInfo = userInfoRes.ok ? await userInfoRes.json() : {}
 
-  // Identify the current logged-in Supabase user
   const userClient = await createServerSupabaseClient()
   const { data: { user } } = await userClient.auth.getUser()
   if (!user) {
@@ -70,7 +69,8 @@ export async function GET(req: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY as string
   )
 
-  const patch: Bag = {
+  // Save to user_drive_configs
+  const userPatch: Bag = {
     user_id: user.id,
     entity,
     user_oauth_refresh_token: tokens.refresh_token,
@@ -81,8 +81,22 @@ export async function GET(req: NextRequest) {
     test_connection_at: null,
     test_connection_error: null,
   }
-  // Upsert on (user_id, entity)
-  await supa.from('user_drive_configs').upsert(patch, { onConflict: 'user_id,entity' })
+  await supa.from('user_drive_configs').upsert(userPatch, { onConflict: 'user_id,entity' })
+
+  // If the connecting user is an admin, also save tokens to entity_drive_configs so the
+  // team can share this OAuth token (e.g. VA uploads use admin's token to write to the
+  // VA's configured folder). Determined via app_metadata.roles or user_metadata.roles.
+  const roles = ((user.app_metadata as Bag)?.roles || (user.user_metadata as Bag)?.roles || []) as string[]
+  const isAdmin = Array.isArray(roles) && roles.includes('admin')
+  if (isAdmin) {
+    const entityPatch: Bag = {
+      user_oauth_refresh_token: tokens.refresh_token,
+      user_oauth_access_token: tokens.access_token,
+      user_oauth_expires_at: new Date(Date.now() + (tokens.expires_in || 3600) * 1000).toISOString(),
+      service_account_email: userInfo.email || null, // reuse this column to record connecting admin
+    }
+    await supa.from('entity_drive_configs').update(entityPatch).eq('entity', entity)
+  }
 
   const res = NextResponse.redirect(adminUrl + '?connected=' + entity)
   res.cookies.delete('oauth_state')

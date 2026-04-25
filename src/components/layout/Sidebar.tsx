@@ -25,6 +25,7 @@ const ADMIN_NAV_ITEMS = [
   { href: '/admin',                label: 'Admin',         dot: '#EF4444', icon: Settings },
   { href: '/admin/feed-health',    label: 'Feed Health',   dot: '#10B981', icon: Activity },
   { href: '/admin/entity-drives',  label: 'Entity Drives', dot: '#6366F1', icon: HardDrive },
+  { href: '/admin/team-drives',    label: 'Team Drives',   dot: '#4285F4', icon: UsersRound },
 ]
 
 export function Sidebar() {
