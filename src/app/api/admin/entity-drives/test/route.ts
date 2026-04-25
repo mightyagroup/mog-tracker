@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { listFilesInFolder, ServiceAccountJson } from '@/lib/google-drive-client'
+import { listFilesInFolder, authFromConfig } from '@/lib/google-drive-client'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
@@ -21,17 +21,19 @@ export async function POST(req: NextRequest) {
     const { data: cfg, error } = await supa.from('entity_drive_configs').select('*').eq('entity', entity).maybeSingle()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     if (!cfg) return NextResponse.json({ error: 'No config for ' + entity }, { status: 404 })
-    if (!cfg.service_account_json) return NextResponse.json({ error: 'No service account JSON saved' }, { status: 400 })
+
+    const auth = authFromConfig(cfg)
+    if (!auth) return NextResponse.json({ error: 'No auth saved (connect Drive via OAuth or paste a service account JSON)' }, { status: 400 })
     if (!cfg.root_folder_id) return NextResponse.json({ error: 'No root folder ID saved' }, { status: 400 })
 
     try {
-      const res = await listFilesInFolder(cfg.service_account_json as ServiceAccountJson, cfg.root_folder_id as string)
+      const res = await listFilesInFolder(auth, cfg.root_folder_id as string)
       await supa.from('entity_drive_configs').update({
         test_connection_ok: true,
         test_connection_at: new Date().toISOString(),
         test_connection_error: null,
       }).eq('entity', entity)
-      return NextResponse.json({ ok: true, file_count: res.count, sample_files: res.files.slice(0, 5) })
+      return NextResponse.json({ ok: true, file_count: res.count, sample_files: res.files.slice(0, 5), auth_kind: auth.kind })
     } catch (e: unknown) {
       const msg = (e as Error).message || 'unknown'
       await supa.from('entity_drive_configs').update({
