@@ -111,7 +111,9 @@ export function listUnresolvedTokens(buffer: Buffer): string[] {
 
 // ─── Internals: XML path discovery ──────────────────────────────────────────
 
-function listXmlPathsToProcess(zip: PizZip): string[] {
+type PizZipInstance = InstanceType<typeof PizZip>
+
+function listXmlPathsToProcess(zip: PizZipInstance): string[] {
   // We process document body, headers, and footers. We do NOT touch
   // styles.xml, settings.xml, etc.
   const paths: string[] = []
