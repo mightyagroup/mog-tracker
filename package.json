@@ -17,6 +17,7 @@
     "lucide-react": "^0.577.0",
     "mammoth": "^1.8.0",
     "next": "14.2.35",
+    "pizzip": "^3.1.7",
     "pg": "^8.20.0",
     "react": "^18",
     "react-dom": "^18",
@@ -24,7 +25,6 @@
   },
   "devDependencies": {
     "@types/node": "^20",
-    "@types/pg": "^8.11.10",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "eslint": "^8",
