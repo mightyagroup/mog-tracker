@@ -1,13 +1,12 @@
 'use client'
 
-// Intake wizard â required fields gated before progressing to drafting.
+// Intake wizard — required fields gated before progressing to drafting.
 // No skipping. Every proposal must complete intake or sit in "intake" status.
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { SolicitationPanel } from '@/components/proposals/SolicitationPanel'
 
 type Intake = {
   solicitation_number: string
@@ -80,6 +79,46 @@ export default function IntakePage() {
   const [msg, setMsg] = useState<string | null>(null)
   const [intakeComplete, setIntakeComplete] = useState(false)
 
+  // Bid Starter generation state
+  type GenResult = {
+    ok?: boolean
+    folder_name?: string
+    folder_url?: string
+    docs_generated?: string[]
+    errors?: Array<{ template: string; error: string }>
+    sub_count?: number
+    error?: string
+    detail?: string
+    missing?: string[]
+    hint?: string
+  }
+  const [bidStarterRunning, setBidStarterRunning] = useState(false)
+  const [bidStarterResult, setBidStarterResult] = useState<GenResult | null>(null)
+  const [keyServiceLocation, setKeyServiceLocation] = useState('')
+  const [agencyShort, setAgencyShort] = useState('')
+
+  async function generateBidStarter(regenerate = false) {
+    setBidStarterRunning(true)
+    setBidStarterResult(null)
+    try {
+      const r = await fetch('/api/proposals/' + proposalId + '/generate-bid-starter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          regenerate,
+          key_service_location: keyServiceLocation || undefined,
+          agency_short: agencyShort || undefined,
+        }),
+      })
+      const j: GenResult = await r.json()
+      setBidStarterResult(j)
+    } catch (err) {
+      setBidStarterResult({ error: 'network_error', detail: (err as Error).message })
+    } finally {
+      setBidStarterRunning(false)
+    }
+  }
+
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -148,18 +187,18 @@ export default function IntakePage() {
   const inputCls = "w-full bg-[#111827] border border-[#374151] rounded px-3 py-2 text-sm text-white"
   const labelCls = "block text-xs uppercase tracking-wider text-gray-400 mb-1"
 
-  if (loading) return <div className="px-8 py-6 text-white">Loading intakeâ¦</div>
+  if (loading) return <div className="px-8 py-6 text-white">Loading intake…</div>
 
   return (
     <div className="px-8 py-6 min-h-screen bg-[#111827] text-white">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-2xl font-bold">Intake â {entity}</h1>
+          <h1 className="text-2xl font-bold">Intake — {entity}</h1>
           <p className="text-sm text-gray-400 mt-1">All {REQUIRED_FIELDS.length} required fields must be completed before drafting begins.</p>
         </div>
         <div className="flex gap-3">
-          <Link href={'/proposals/' + entity} className="px-3 py-2 rounded bg-[#1F2937] text-sm border border-[#374151]">â Back</Link>
-          <Link href={'/proposals/' + entity + '/' + proposalId + '/validate'} className="px-3 py-2 rounded bg-[#D4AF37] text-[#111827] text-sm font-semibold">Validate â</Link>
+          <Link href={'/proposals/' + entity} className="px-3 py-2 rounded bg-[#1F2937] text-sm border border-[#374151]">← Back</Link>
+          <Link href={'/proposals/' + entity + '/' + proposalId + '/validate'} className="px-3 py-2 rounded bg-[#D4AF37] text-[#111827] text-sm font-semibold">Validate →</Link>
         </div>
       </div>
 
@@ -168,8 +207,6 @@ export default function IntakePage() {
       )}
       {error && <div className="bg-red-900/30 border border-red-700 text-red-200 p-3 rounded mb-4">{error}</div>}
       {msg && <div className="bg-blue-900/30 border border-blue-700 text-blue-200 p-3 rounded mb-4">{msg}</div>}
-
-      <SolicitationPanel proposalId={proposalId} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-[#1F2937] border border-[#374151] rounded-xl p-5 space-y-4">
@@ -189,13 +226,13 @@ export default function IntakePage() {
             <div>
               <label className={labelCls}>Submission Method *</label>
               <select className={inputCls} value={form.submission_method} onChange={e => setForm({ ...form, submission_method: e.target.value })}>
-                <option value="">Selectâ¦</option>
+                <option value="">Select…</option>
                 {SUBMISSION_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
             </div>
             <div className="col-span-2">
               <label className={labelCls}>Submission Portal / URL</label>
-              <input className={inputCls} value={form.submission_portal_url} onChange={e => setForm({ ...form, submission_portal_url: e.target.value })} placeholder="https://sam.gov/â¦ or email address" />
+              <input className={inputCls} value={form.submission_portal_url} onChange={e => setForm({ ...form, submission_portal_url: e.target.value })} placeholder="https://sam.gov/… or email address" />
             </div>
             <div>
               <label className={labelCls}>NAICS Code *</label>
@@ -237,12 +274,12 @@ export default function IntakePage() {
             </div>
             <div className="col-span-2">
               <label className={labelCls}>Evaluation Factors (Section M) *</label>
-              <textarea className={inputCls} rows={3} value={form.evaluation_factors} onChange={e => setForm({ ...form, evaluation_factors: e.target.value })} placeholder="e.g. LPTA, Best Value Trade-off, weighted factorsâ¦" />
+              <textarea className={inputCls} rows={3} value={form.evaluation_factors} onChange={e => setForm({ ...form, evaluation_factors: e.target.value })} placeholder="e.g. LPTA, Best Value Trade-off, weighted factors…" />
             </div>
             <div>
               <label className={labelCls}>Pricing Format *</label>
               <select className={inputCls} value={form.pricing_format} onChange={e => setForm({ ...form, pricing_format: e.target.value })}>
-                <option value="">Selectâ¦</option>
+                <option value="">Select…</option>
                 {PRICING_FORMATS.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
@@ -279,7 +316,7 @@ export default function IntakePage() {
               const done = typeof v === 'string' ? v.trim().length > 0 : Boolean(v)
               return (
                 <li key={f} className="flex items-center gap-2 text-sm">
-                  <span className={done ? 'text-green-400' : 'text-gray-500'}>{done ? 'â' : 'â'}</span>
+                  <span className={done ? 'text-green-400' : 'text-gray-500'}>{done ? '✓' : '○'}</span>
                   <span className={done ? 'text-gray-300' : 'text-gray-500'}>{f}</span>
                 </li>
               )
@@ -289,6 +326,106 @@ export default function IntakePage() {
             {canComplete ? 'All required fields complete.' : (missing.length + ' field(s) still required')}
           </div>
         </div>
+      </div>
+
+      {/* ─── Bid Starter Package Generator ──────────────────────────────── */}
+      <div className="mt-8 bg-[#1F2937] border border-[#374151] rounded-xl p-5">
+        <div className="flex items-start justify-between mb-3 gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Bid Starter Package</h2>
+            <p className="text-xs text-gray-400 mt-1">Auto-generates 14 documents in a Drive folder: Contract Intel, USASpending Deep Dive, Wage Determination, Pricing (4a), Technical (4b), Sub-Facing SOW (sanitized), Sub Outreach Email (sanitized), Subcontractor Search, Tracker Workbook, To-Do List, Risk Log, Contract Summary, Game Plan, Submission Checklist.</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+          <div>
+            <label className={labelCls}>Key Service Location (override)</label>
+            <input className={inputCls} value={keyServiceLocation} onChange={e => setKeyServiceLocation(e.target.value)} placeholder="e.g. MowingToronto, WarrenBridgeCleaning" />
+          </div>
+          <div>
+            <label className={labelCls}>Agency Short (override)</label>
+            <input className={inputCls} value={agencyShort} onChange={e => setAgencyShort(e.target.value)} placeholder="e.g. DOD, USACE, DOI" />
+          </div>
+        </div>
+        <p className="text-xs text-gray-500 mb-4">Leave blank to auto-derive from the parsed solicitation. Folder name pattern: [KSL]-[Agency]-[Sol#].</p>
+
+        <div className="flex flex-wrap gap-3">
+          <button
+            disabled={bidStarterRunning}
+            onClick={() => generateBidStarter(false)}
+            className="px-4 py-2 rounded bg-[#D4AF37] text-[#111827] text-sm font-semibold disabled:opacity-50"
+          >
+            {bidStarterRunning ? 'Generating… (1-3 min)' : 'Generate Bid Starter Package'}
+          </button>
+          <button
+            disabled={bidStarterRunning}
+            onClick={() => generateBidStarter(true)}
+            className="px-4 py-2 rounded bg-[#374151] text-white text-sm border border-[#4B5563] disabled:opacity-50"
+            title="Force regenerate even if a folder already exists"
+          >
+            Regenerate
+          </button>
+        </div>
+
+        {bidStarterRunning && (
+          <div className="mt-4 bg-blue-900/20 border border-blue-800/40 text-blue-200 p-3 rounded text-sm">
+            Parsing solicitation, searching subs, generating 14 documents, uploading to Drive… this takes 1–3 minutes.
+          </div>
+        )}
+
+        {bidStarterResult && (
+          <div className="mt-4">
+            {bidStarterResult.ok ? (
+              <div className="bg-green-900/20 border border-green-800/40 text-green-200 p-4 rounded">
+                <div className="font-semibold mb-2">
+                  Bid Starter generated.
+                  {' '}
+                  <a href={bidStarterResult.folder_url} target="_blank" rel="noreferrer" className="underline text-yellow-300">
+                    Open Drive folder ({bidStarterResult.folder_name}) →
+                  </a>
+                </div>
+                <div className="text-xs text-green-200/80 mb-2">
+                  {bidStarterResult.docs_generated?.length ?? 0} of 14 documents generated.{' '}
+                  {bidStarterResult.sub_count ?? 0} subcontractor candidates included.
+                </div>
+                <ul className="text-xs grid grid-cols-1 md:grid-cols-2 gap-1 mt-2">
+                  {bidStarterResult.docs_generated?.map(d => (
+                    <li key={d} className="text-green-200/80">✓ {d}</li>
+                  ))}
+                </ul>
+                {bidStarterResult.errors && bidStarterResult.errors.length > 0 && (
+                  <div className="mt-3 text-xs text-yellow-300">
+                    Some templates failed:
+                    <ul className="ml-4 list-disc">
+                      {bidStarterResult.errors.map((e, i) => (
+                        <li key={i}>{e.template}: {e.error}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="bg-red-900/30 border border-red-700 text-red-200 p-4 rounded text-sm">
+                <div className="font-semibold">{bidStarterResult.error || 'Generation failed'}</div>
+                {bidStarterResult.detail && <div className="text-xs mt-1 opacity-80">{bidStarterResult.detail}</div>}
+                {bidStarterResult.hint && <div className="text-xs mt-2 italic opacity-80">{bidStarterResult.hint}</div>}
+                {bidStarterResult.missing && bidStarterResult.missing.length > 0 && (
+                  <div className="text-xs mt-2">
+                    Missing in Supabase Storage:
+                    <ul className="ml-4 list-disc">
+                      {bidStarterResult.missing.map((m, i) => <li key={i}>{m}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {bidStarterResult.error === 'already_generated' && bidStarterResult.folder_url && (
+                  <div className="mt-2">
+                    Existing folder: <a href={bidStarterResult.folder_url} target="_blank" rel="noreferrer" className="underline text-yellow-300">{bidStarterResult.folder_url}</a>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
