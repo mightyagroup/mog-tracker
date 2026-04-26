@@ -24,7 +24,7 @@
 //
 // Server-side only.
 
-import PizZip from 'pizzip'
+import JSZip from 'jszip'
 
 // ─── Public types ────────────────────────────────────────────────────────────
 
@@ -54,19 +54,19 @@ export type GenerateOptions = {
  * Generate a filled DOCX from a tokenized template buffer + tokens map.
  * Returns a Buffer containing the new .docx.
  */
-export function generateBidDoc(
+export async function generateBidDoc(
   templateBuffer: Buffer,
   tokens: TokenMap,
   options: GenerateOptions = {}
-): Buffer {
-  const zip = new PizZip(templateBuffer)
+): Promise<Buffer> {
+  const zip = await JSZip.loadAsync(templateBuffer)
   const xmlPaths = listXmlPathsToProcess(zip)
   const replacements = sortReplacementsLongestFirst(tokens)
 
   for (const path of xmlPaths) {
     const file = zip.file(path)
     if (!file) continue
-    const xml = file.asText()
+    const xml = await file.async('string')
     const updated = applyReplacementsToXml(xml, replacements)
     zip.file(path, updated)
   }
@@ -75,7 +75,7 @@ export function generateBidDoc(
     for (const path of xmlPaths) {
       const file = zip.file(path)
       if (!file) continue
-      const xml = file.asText()
+      const xml = await file.async('string')
       const remaining = xml.match(/\{\{[A-Z_0-9]+\}\}/g)
       if (remaining && remaining.length > 0) {
         throw new Error(
@@ -86,22 +86,22 @@ export function generateBidDoc(
     }
   }
 
-  const output = zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' })
-  return output as Buffer
+  const output = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
+  return output
 }
 
 /**
  * Convenience: list every {{TOKEN}} that remains unresolved in a generated
  * document. Useful for partial-fill scenarios where missing data is OK.
  */
-export function listUnresolvedTokens(buffer: Buffer): string[] {
-  const zip = new PizZip(buffer)
+export async function listUnresolvedTokens(buffer: Buffer): Promise<string[]> {
+  const zip = await JSZip.loadAsync(buffer)
   const xmlPaths = listXmlPathsToProcess(zip)
   const found = new Set<string>()
   for (const path of xmlPaths) {
     const file = zip.file(path)
     if (!file) continue
-    const xml = file.asText()
+    const xml = await file.async('string')
     for (const m of xml.matchAll(/\{\{([A-Z_0-9]+)\}\}/g)) {
       found.add(m[1])
     }
@@ -111,17 +111,15 @@ export function listUnresolvedTokens(buffer: Buffer): string[] {
 
 // ─── Internals: XML path discovery ──────────────────────────────────────────
 
-type PizZipInstance = InstanceType<typeof PizZip>
-
-function listXmlPathsToProcess(zip: PizZipInstance): string[] {
+function listXmlPathsToProcess(zip: JSZip): string[] {
   // We process document body, headers, and footers. We do NOT touch
   // styles.xml, settings.xml, etc.
   const paths: string[] = []
-  for (const [path] of Object.entries(zip.files)) {
-    if (path === 'word/document.xml') paths.push(path)
-    else if (path.startsWith('word/header') && path.endsWith('.xml')) paths.push(path)
-    else if (path.startsWith('word/footer') && path.endsWith('.xml')) paths.push(path)
-  }
+  zip.forEach((relativePath) => {
+    if (relativePath === 'word/document.xml') paths.push(relativePath)
+    else if (relativePath.startsWith('word/header') && relativePath.endsWith('.xml')) paths.push(relativePath)
+    else if (relativePath.startsWith('word/footer') && relativePath.endsWith('.xml')) paths.push(relativePath)
+  })
   return paths
 }
 
@@ -155,9 +153,7 @@ function sortReplacementsLongestFirst(tokens: TokenMap): Replacement[] {
       continue
     }
   }
-  // Longest token names first to avoid partial-name collisions (e.g.,
-  // {{SOL_NUMBER}} should be replaced before any token name that contains
-  // SOL_NUMBER as a substring).
+  // Longest token names first to avoid partial-name collisions.
   return replacements.sort((a, b) => b.tokenName.length - a.tokenName.length)
 }
 
@@ -182,10 +178,7 @@ function applyReplacementsToXml(xml: string, replacements: Replacement[]): strin
     }
   }
 
-  // Pass 2: simple text replacements. Tokens that span multiple runs would
-  // not be matched by a literal substring; templates we ship keep each
-  // token in a single run, so this is fine. Defensively, we also handle
-  // text that's been split by xml:space markers.
+  // Pass 2: simple text replacements.
   for (const r of replacements) {
     if (r.kind !== 'simple') continue
     const placeholder = '{{' + r.tokenName + '}}'
@@ -241,9 +234,7 @@ function renderTableRow(cells: Array<string | number | null | undefined>, isHead
 }
 
 function renderTableCell(text: string, isHeader: boolean): string {
-  const tcPr = (
-    '<w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr>'
-  )
+  const tcPr = '<w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr>'
   const runProps = isHeader ? '<w:rPr><w:b/></w:rPr>' : ''
   // Multi-line cell text: each line becomes its own paragraph
   const lines = text.split('\n')
@@ -256,9 +247,6 @@ function renderTableCell(text: string, isHeader: boolean): string {
 }
 
 function renderListXml(list: ListTokenValue): string {
-  // Render each bullet as its own paragraph using the "List Bullet" style
-  // reference if available. Many docx templates have a "ListBullet" style
-  // ID; we use a generic paragraph here that the reader can re-style.
   return list.bullets.map(text => (
     '<w:p>' +
     '<w:pPr><w:pStyle w:val="ListBullet"/></w:pPr>' +
