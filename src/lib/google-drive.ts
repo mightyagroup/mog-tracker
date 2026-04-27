@@ -107,6 +107,80 @@ async function getAccessToken(): Promise<string> {
   return cachedToken.token
 }
 
+// ─── Per-entity OAuth user delegation ────────────────────────────────────────
+// Service accounts have no storage quota. Files must be uploaded under a real
+// user's identity. The connected entity OAuth user (info@exousias.com etc.)
+// stored a refresh_token in entity_drive_configs. We exchange it on-demand
+// for an access_token via Google's standard OAuth refresh-token grant.
+// Result is cached per-entity for an hour.
+
+const oauthTokenCache = new Map<string, { token: string; expiresAt: number }>()
+
+function getOAuthClientCreds(entity: string): { clientId: string; clientSecret: string } | null {
+  // Per-entity vars take precedence (GOOGLE_OAUTH_CLIENT_ID_EXOUSIA etc.).
+  // Fall back to a single set used across all entities.
+  const E = entity.toUpperCase()
+  const idPer = process.env['GOOGLE_OAUTH_CLIENT_ID_' + E]
+  const secPer = process.env['GOOGLE_OAUTH_CLIENT_SECRET_' + E]
+  if (idPer && secPer) return { clientId: idPer, clientSecret: secPer }
+  const idShared = process.env.GOOGLE_OAUTH_CLIENT_ID
+  const secShared = process.env.GOOGLE_OAUTH_CLIENT_SECRET
+  if (idShared && secShared) return { clientId: idShared, clientSecret: secShared }
+  return null
+}
+
+/**
+ * Exchange the entity's stored refresh_token for an access_token AS the
+ * connected user. Returns null (with reason) if the entity hasn't connected
+ * Drive via OAuth, or if OAuth client credentials are missing in env vars.
+ */
+export async function getOAuthAccessTokenForEntity(entity: string): Promise<{ ok: true; token: string } | { ok: false; reason: string }> {
+  const cached = oauthTokenCache.get(entity)
+  if (cached && cached.expiresAt > Date.now() + 60_000) return { ok: true, token: cached.token }
+
+  const creds = getOAuthClientCreds(entity)
+  if (!creds) {
+    return { ok: false, reason: 'oauth_client_credentials_missing — set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET (or the per-entity GOOGLE_OAUTH_CLIENT_ID_' + entity.toUpperCase() + ' / _SECRET_' + entity.toUpperCase() + ') in the environment' }
+  }
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) return { ok: false, reason: 'supabase env missing' }
+  const { createClient } = await import('@supabase/supabase-js')
+  const sb = createClient(url, key)
+  const { data, error } = await sb
+    .from('entity_drive_configs')
+    .select('user_oauth_refresh_token')
+    .eq('entity', entity)
+    .maybeSingle()
+  if (error) return { ok: false, reason: 'entity_drive_configs lookup failed: ' + error.message }
+  if (!data?.user_oauth_refresh_token) {
+    return { ok: false, reason: 'no refresh_token stored for ' + entity + ' — connect Drive via /admin/entity-drives' }
+  }
+
+  const tokenResp = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: creds.clientId,
+      client_secret: creds.clientSecret,
+      refresh_token: data.user_oauth_refresh_token as string,
+      grant_type: 'refresh_token',
+    }),
+  })
+  const tokenJson = await tokenResp.json().catch(() => ({})) as Record<string, unknown>
+  if (!tokenResp.ok) {
+    return { ok: false, reason: 'oauth_refresh_failed (' + tokenResp.status + '): ' + JSON.stringify(tokenJson).slice(0, 240) }
+  }
+  const accessToken = tokenJson.access_token as string | undefined
+  const expiresIn = (tokenJson.expires_in as number | undefined) || 3600
+  if (!accessToken) {
+    return { ok: false, reason: 'oauth response had no access_token' }
+  }
+  oauthTokenCache.set(entity, { token: accessToken, expiresAt: Date.now() + expiresIn * 1000 })
+  return { ok: true, token: accessToken }
+}
+
 // --- Drive API helpers ---
 
 async function driveRequest(
@@ -443,9 +517,30 @@ export async function uploadBufferDetailed(
   fileName: string,
   parentId: string,
   mimeType: string = 'application/octet-stream',
-): Promise<{ ok: true; file: DriveFile } | { ok: false; status: number; error: string }> {
+  options?: { entity?: string },
+): Promise<{ ok: true; file: DriveFile; auth_method: 'oauth_user' | 'service_account' } | { ok: false; status: number; error: string }> {
   try {
-    const token = await getAccessToken()
+    // Prefer OAuth user delegation when an entity is specified — service
+    // accounts cannot store files (Google Workspace policy returns 403 with
+    // "Service Accounts do not have storage quota"). The connected user's
+    // refresh_token (stored in entity_drive_configs) provides storage quota.
+    let token: string
+    let authMethod: 'oauth_user' | 'service_account' = 'service_account'
+    if (options?.entity) {
+      const oauth = await getOAuthAccessTokenForEntity(options.entity)
+      if (oauth.ok) {
+        token = oauth.token
+        authMethod = 'oauth_user'
+      } else {
+        // Fall back to service account, but flag the reason in the error if
+        // we hit the storage-quota wall later.
+        token = await getAccessToken()
+        // We'll surface oauth.reason in the error if the SA upload also fails.
+        ;(globalThis as unknown as { __mogOauthFallbackReason?: string }).__mogOauthFallbackReason = oauth.reason
+      }
+    } else {
+      token = await getAccessToken()
+    }
 
     // Step 1: initiate resumable upload — POST metadata, receive upload URL
     const initResp = await fetch(
@@ -464,7 +559,11 @@ export async function uploadBufferDetailed(
 
     if (!initResp.ok) {
       const txt = await initResp.text()
-      return { ok: false, status: initResp.status, error: `init: ${initResp.status} ${txt.slice(0, 300)}` }
+      const oauthReason = (globalThis as unknown as { __mogOauthFallbackReason?: string }).__mogOauthFallbackReason
+      const hint = (initResp.status === 403 && txt.includes('storage quota'))
+        ? '\nFix: this entity needs OAuth user delegation. ' + (oauthReason || 'OAuth refresh token + GOOGLE_OAUTH_CLIENT_ID/SECRET env vars required.')
+        : ''
+      return { ok: false, status: initResp.status, error: `init [${authMethod}]: ${initResp.status} ${txt.slice(0, 300)}${hint}` }
     }
     const uploadUrl = initResp.headers.get('Location')
     if (!uploadUrl) {
@@ -489,10 +588,10 @@ export async function uploadBufferDetailed(
 
     if (!putResp.ok) {
       const txt = await putResp.text()
-      return { ok: false, status: putResp.status, error: `put: ${putResp.status} ${txt.slice(0, 300)}` }
+      return { ok: false, status: putResp.status, error: `put [${authMethod}]: ${putResp.status} ${txt.slice(0, 300)}` }
     }
     const file = await putResp.json()
-    return { ok: true, file }
+    return { ok: true, file, auth_method: authMethod }
   } catch (err) {
     return { ok: false, status: 0, error: 'exception: ' + (err as Error).message }
   }

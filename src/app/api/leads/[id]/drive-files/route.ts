@@ -167,7 +167,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   for (const f of files) {
     try {
       const buf = Buffer.from(await f.arrayBuffer())
-      const r = await uploadBufferDetailed(buf, f.name, targetId, mimeTypeFromName(f.name, f.type))
+      const r = await uploadBufferDetailed(buf, f.name, targetId, mimeTypeFromName(f.name, f.type), { entity: lead.entity as string })
       if (r.ok) {
         results.push({ name: f.name, ok: true, drive_file_id: r.file.id, drive_url: r.file.webViewLink, bytes: buf.length })
       } else {
