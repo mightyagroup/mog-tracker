@@ -474,7 +474,10 @@ export async function uploadBufferDetailed(
     // Step 2: PUT the binary content. Wrap the Buffer in a Blob so the
     // BodyInit type accepts it across all current TS lib defs (Node 20
     // typings are stricter about Uint8Array as BodyInit than older ones).
-    const blob = new Blob([new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)], { type: mimeType })
+    // Buffer.buffer is an ArrayBuffer; slice out exactly this view so the
+    // Blob doesn't include trailing garbage from a pooled Buffer.
+    const ab = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer
+    const blob = new Blob([ab], { type: mimeType })
     const putResp = await fetch(uploadUrl, {
       method: 'PUT',
       headers: {
