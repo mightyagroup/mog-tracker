@@ -105,7 +105,7 @@ export default function TeamDriveMembersPage() {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold">Team Drive Members</h1>
-          <p className="text-sm text-gray-400 mt-1">Anyone listed here gets Editor access automatically when the system creates a new Drive folder. Adding a new email here doesn't grant access to existing folders — click <b>Backfill</b> after.</p>
+          <p className="text-sm text-gray-400 mt-1">Anyone listed here gets Editor access automatically when the system creates a new Drive folder. Adding a new email here does not grant access to existing folders — click <b>Backfill</b> after.</p>
         </div>
         <Link href="/admin" className="px-3 py-2 rounded bg-[#1F2937] text-sm border border-[#374151]">← Admin home</Link>
       </div>
