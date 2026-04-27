@@ -471,6 +471,18 @@ export async function uploadBuffer(
 }
 
 /**
+ * Delete a file or folder from Drive by ID.
+ * Returns true if the file was deleted (or already gone), false on error.
+ */
+export async function deleteDriveFile(fileId: string): Promise<{ ok: boolean; error?: string }> {
+  const resp = await driveRequest('/drive/v3/files/' + fileId, { method: 'DELETE' })
+  if (resp.status === 204 || resp.status === 200) return { ok: true }
+  if (resp.status === 404) return { ok: true } // already gone
+  const txt = await resp.text()
+  return { ok: false, error: resp.status + ': ' + txt.slice(0, 200) }
+}
+
+/**
  * Download a Drive file by ID and return its raw bytes as a Buffer.
  * Works for any file type the service account has access to.
  */
@@ -575,6 +587,51 @@ export async function listFiles(folderId: string): Promise<DriveFile[]> {
   if (!resp.ok) return []
   const data = await resp.json()
   return data.files || []
+}
+
+/** Extended file info including size + modified date for the tracker UI. */
+export interface DriveFileDetailed {
+  id: string
+  name: string
+  mimeType: string
+  size?: string
+  modifiedTime?: string
+  webViewLink?: string
+  webContentLink?: string
+  parents?: string[]
+}
+
+/**
+ * List files in a Drive folder with detailed metadata. Used by the tracker
+ * to render the Files-in-Drive section. Excludes trashed files. Returns
+ * folders and files; the UI sorts/filters as needed.
+ */
+export async function listFilesDetailed(folderId: string, opts?: { includeSubfolderFiles?: boolean }): Promise<DriveFileDetailed[]> {
+  const fields = 'files(id,name,mimeType,size,modifiedTime,webViewLink,webContentLink,parents)'
+  const resp = await driveRequest(
+    `/drive/v3/files?q='${folderId}'+in+parents+and+trashed=false&fields=${fields}&orderBy=folder,name&pageSize=100`
+  )
+  if (!resp.ok) return []
+  const data = await resp.json()
+  const direct: DriveFileDetailed[] = data.files || []
+
+  if (!opts?.includeSubfolderFiles) return direct
+
+  // Recurse one level: collect files from each direct child folder
+  const subfolders = direct.filter(f => f.mimeType === 'application/vnd.google-apps.folder')
+  const subFiles: DriveFileDetailed[] = []
+  for (const sf of subfolders) {
+    const r = await driveRequest(
+      `/drive/v3/files?q='${sf.id}'+in+parents+and+trashed=false&fields=${fields}&orderBy=folder,name&pageSize=100`
+    )
+    if (r.ok) {
+      const j = await r.json()
+      for (const f of (j.files || [])) {
+        subFiles.push({ ...f, parents: [sf.id] })
+      }
+    }
+  }
+  return [...direct, ...subFiles]
 }
 
 /**

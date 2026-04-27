@@ -16,6 +16,7 @@ import {
   X, ExternalLink, Edit2, Save, Check, Plus, ChevronDown, MessageSquare, Folder, RefreshCw, FileText, Loader2, AlertTriangle, Download,
 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
+import { DriveFilesSection } from './DriveFilesSection'
 
 interface LeadDetailPanelProps {
   lead: GovLead
@@ -531,7 +532,7 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                   ) : (
                     <div className="flex items-start gap-4 p-3 bg-[#111827] rounded-lg border border-[#374151]">
                       <div className="flex-1 min-w-0">
-                        <div className="text-white text-sm font-medium">{lead.contracting_officer_name ?? 'â'}</div>
+                        <div className="text-white text-sm font-medium">{lead.contracting_officer_name ?? '—'}</div>
                         {lead.contracting_officer_email && (
                           <a href={`mailto:${lead.contracting_officer_email}`} className="text-xs hover:underline mt-0.5 block" style={{ color: accentColor }}>
                             {lead.contracting_officer_email}
@@ -564,7 +565,7 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                   <div>
                     <label className={labelCls}>Service Category</label>
                     <select className={selectCls} value={form.service_category_id ?? ''} onChange={e => setForm(f => ({ ...f, service_category_id: e.target.value }))}>
-                      <option value="">â None â</option>
+                      <option value="">— None —</option>
                       {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   </div>
@@ -586,7 +587,7 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <div className={labelCls}>Posted</div>
-                    <div className="text-gray-200 text-sm">{lead.posted_date ? format(parseISO(lead.posted_date), 'MMM d, yyyy') : 'â'}</div>
+                    <div className="text-gray-200 text-sm">{lead.posted_date ? format(parseISO(lead.posted_date), 'MMM d, yyyy') : '—'}</div>
                   </div>
                   <div>
                     <div className={labelCls}>Deadline</div>
@@ -594,7 +595,7 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                   </div>
                   <div>
                     <div className={labelCls}>Archive</div>
-                    <div className="text-gray-200 text-sm">{lead.archive_date ? format(parseISO(lead.archive_date), 'MMM d, yyyy') : 'â'}</div>
+                    <div className="text-gray-200 text-sm">{lead.archive_date ? format(parseISO(lead.archive_date), 'MMM d, yyyy') : '—'}</div>
                   </div>
                 </div>
               </div>
@@ -625,7 +626,7 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                       className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition disabled:opacity-50"
                     >
                       <RefreshCw size={12} className={usaLoading ? 'animate-spin' : ''} />
-                      {usaLoading ? 'Looking upâ¦' : 'Refresh'}
+                      {usaLoading ? 'Looking up…' : 'Refresh'}
                     </button>
                   </div>
                 </div>
@@ -634,8 +635,8 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                 {usaData && !usaLoading && (
                   <div className={`mb-3 px-3 py-2 rounded-lg text-xs border ${usaData.found ? 'bg-[#052e16] border-green-900 text-green-300' : 'bg-[#1F2937] border-[#374151] text-gray-500'}`}>
                     {usaData.found
-                      ? `â Prior award data found on USASpending.gov (Matched by: ${usaData.usaspending_match_method ?? 'N/A'}, Confidence: ${usaData.usaspending_confidence ?? 'N/A'})`
-                      : 'No prior award data found on USASpending.gov â enter manually.'}
+                      ? `✓ Prior award data found on USASpending.gov (Matched by: ${usaData.usaspending_match_method ?? 'N/A'}, Confidence: ${usaData.usaspending_confidence ?? 'N/A'})`
+                      : 'No prior award data found on USASpending.gov — enter manually.'}
                   </div>
                 )}
 
@@ -657,11 +658,11 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                   <div className="grid grid-cols-2 gap-3 mb-3 p-3 bg-[#111827] rounded-lg border border-[#374151]">
                     <div>
                       <div className="text-gray-500 text-xs mb-0.5">Previous Award Total</div>
-                      <div className="text-white font-bold text-sm">{formatFullCurrency(form.previous_award_total ?? lead.previous_award_total) ?? 'â'}</div>
+                      <div className="text-white font-bold text-sm">{formatFullCurrency(form.previous_award_total ?? lead.previous_award_total) ?? '—'}</div>
                     </div>
                     <div>
                       <div className="text-gray-500 text-xs mb-0.5">Incumbent Contractor</div>
-                      <div className="text-white text-sm font-medium">{form.incumbent_contractor ?? lead.incumbent_contractor ?? 'â'}</div>
+                      <div className="text-white text-sm font-medium">{form.incumbent_contractor ?? lead.incumbent_contractor ?? '—'}</div>
                     </div>
                   </div>
                 )}
@@ -804,6 +805,9 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                   </div>
                 )}
               </div>
+
+              {/* Files in Drive — upload, list, delete */}
+              <DriveFilesSection leadId={lead.id} driveFolderUrl={form.drive_folder_url || lead.drive_folder_url} />
 
               {/* Suggested Partners */}
               <div>
@@ -994,7 +998,7 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
                             <span className="text-[10px] uppercase tracking-wider font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">Doc Sync</span>
                           )}
                           {!isAmendment && !isDocSync && i.interaction_type && i.interaction_type !== 'note' && (
-                            <span className="text-xs text-gray-500 capitalize">Â· {i.interaction_type.replace('_', ' ')}</span>
+                            <span className="text-xs text-gray-500 capitalize">· {i.interaction_type.replace('_', ' ')}</span>
                           )}
                         </div>
                         {i.subject && i.subject !== 'Note' && (
@@ -1031,7 +1035,7 @@ export function LeadDetailPanel({ lead, categories, entity, accentColor = '#D4AF
   )
 }
 
-// ââ Status dropdown (inline in header) ââââââââââââââââââââââââââââââââââââââ
+// ── Status dropdown (inline in header) ──────────────────────────────────────
 function StatusDropdown({ status, onChange }: { status: LeadStatus; onChange: (s: LeadStatus) => void }) {
   const [open, setOpen] = useState(false)
   return (
@@ -1057,7 +1061,7 @@ function StatusDropdown({ status, onChange }: { status: LeadStatus; onChange: (s
   )
 }
 
-// ââ Small helpers âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ── Small helpers ─────────────────────────────────────────────────────────────
 function EditableField({ label, value, editMode, onChange, type = 'text' }: {
   label: string; value?: string | null; editMode: boolean
   onChange: (v: string) => void; type?: string
@@ -1073,14 +1077,14 @@ function EditableField({ label, value, editMode, onChange, type = 'text' }: {
           onChange={e => onChange(e.target.value)}
         />
       ) : (
-        <div className="text-gray-200 text-sm">{value || 'â'}</div>
+        <div className="text-gray-200 text-sm">{value || '—'}</div>
       )}
     </div>
   )
 }
 
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
-  if (!value || value === 'â') return null
+  if (!value || value === '—') return null
   return (
     <div>
       <div className={labelCls}>{label}</div>
@@ -1106,7 +1110,7 @@ function SuggestedSubCard({
             <span key={r} className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: accentColor + '22', color: accentColor }}>{r}</span>
           ))}
           {sub.sub_type === 'teaming_partner' && sub.teaming_agreement_status === 'executed' && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-[#052e16] text-green-400">teaming â</span>
+            <span className="text-xs px-1.5 py-0.5 rounded bg-[#052e16] text-green-400">teaming ✓</span>
           )}
         </div>
       </div>
