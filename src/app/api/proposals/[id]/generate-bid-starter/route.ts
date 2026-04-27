@@ -29,7 +29,13 @@ import {
   checkTemplatesAvailable,
 } from '@/lib/bid-templates/template-loader'
 import { getEntityData } from '@/lib/proposals/entity-data'
-import { createFolder, uploadBuffer, getMogBidsRootId } from '@/lib/google-drive'
+import {
+  createFolder,
+  uploadBuffer,
+  getMogBidsRootId,
+  findPrimarySolicitation,
+  downloadDriveFile,
+} from '@/lib/google-drive'
 
 export const maxDuration = 300 // 5 minutes for full bid starter generation
 
@@ -119,33 +125,63 @@ export async function POST(
     }, { status: 409 })
   }
 
-  // ─── Fetch the uploaded solicitation file ──────────────────────────────────
-  const solicitationStoragePath = proposal.solicitation_storage_path as string | null
-  if (!solicitationStoragePath) {
-    return NextResponse.json({ error: 'no_solicitation_uploaded' }, { status: 400 })
-  }
+  // ─── Resolve the solicitation file ─────────────────────────────────────────
+  // Source-of-truth order:
+  //   1. gov_lead.drive_folder_id  -> findPrimarySolicitation in that folder
+  //   2. proposal.solicitation_storage_path -> Supabase Storage (legacy)
+  //
+  // Per Ella's directive 2026-04-26: Drive is the source of truth. Files
+  // attached at the lead/active-bid stage flow into proposal intake without
+  // re-upload. The Supabase Storage path stays as a fallback for older
+  // proposals that pre-date this change.
 
-  const { data: fileBlob, error: dlErr } = await svc.storage
-    .from('proposal-solicitations')
-    .download(solicitationStoragePath)
-  if (dlErr || !fileBlob) {
-    return NextResponse.json({ error: 'solicitation_download_failed', detail: dlErr?.message }, { status: 500 })
+  let solicitationBuffer: Buffer
+  let mimeType: string
+  let solicitationSource: string
+
+  if (lead.drive_folder_id) {
+    const primary = await findPrimarySolicitation(lead.drive_folder_id as string).catch(() => null)
+    if (!primary) {
+      return NextResponse.json({
+        error: 'no_solicitation_in_drive_folder',
+        hint: 'Drive folder for this lead is empty or does not contain a recognizable solicitation file (SF1449, RFP, RFQ, PWS, SOW). Upload the solicitation to the Drive folder and try again.',
+        drive_folder_id: lead.drive_folder_id,
+      }, { status: 400 })
+    }
+    const dl = await downloadDriveFile(primary.id)
+    solicitationBuffer = dl.buffer
+    mimeType = dl.mimeType
+    solicitationSource = 'drive:' + primary.id + ' (' + primary.name + ')'
+  } else if (proposal.solicitation_storage_path) {
+    const path = proposal.solicitation_storage_path as string
+    const { data: fileBlob, error: dlErr } = await svc.storage
+      .from('proposal-solicitations')
+      .download(path)
+    if (dlErr || !fileBlob) {
+      return NextResponse.json({ error: 'solicitation_download_failed', detail: dlErr?.message }, { status: 500 })
+    }
+    solicitationBuffer = Buffer.from(await fileBlob.arrayBuffer())
+    mimeType = path.toLowerCase().endsWith('.pdf')
+      ? 'application/pdf'
+      : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    solicitationSource = 'supabase:' + path
+  } else {
+    return NextResponse.json({
+      error: 'no_solicitation_available',
+      hint: 'This lead has no Drive folder and no Supabase-stored solicitation. Upload the solicitation file to the lead\'s Drive folder (preferred) or via the legacy intake upload.',
+    }, { status: 400 })
   }
-  const solicitationBuffer = Buffer.from(await fileBlob.arrayBuffer())
-  const mimeType = solicitationStoragePath.toLowerCase().endsWith('.pdf')
-    ? 'application/pdf'
-    : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
   // ─── Parse the solicitation ───────────────────────────────────────────────
   let parsed: ParsedSolicitation
   try {
     parsed = await parseSolicitation({
       buffer: solicitationBuffer,
-      filename: solicitationStoragePath,
+      filename: solicitationSource,
       mimeType,
     })
   } catch (e) {
-    return NextResponse.json({ error: 'solicitation_parse_failed', detail: (e as Error).message }, { status: 500 })
+    return NextResponse.json({ error: 'solicitation_parse_failed', detail: (e as Error).message, source: solicitationSource }, { status: 500 })
   }
 
   // ─── Subcontractor search ──────────────────────────────────────────────────

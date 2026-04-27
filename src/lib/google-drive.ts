@@ -465,6 +465,101 @@ export async function uploadBuffer(
 }
 
 /**
+ * Download a Drive file by ID and return its raw bytes as a Buffer.
+ * Works for any file type the service account has access to.
+ */
+export async function downloadDriveFile(fileId: string): Promise<{ buffer: Buffer; mimeType: string; name: string }> {
+  // Get metadata first so we can return name + MIME type
+  const metaResp = await driveRequest('/drive/v3/files/' + fileId + '?fields=id,name,mimeType,size')
+  if (!metaResp.ok) {
+    throw new Error('downloadDriveFile metadata ' + fileId + ': ' + metaResp.status + ' ' + (await metaResp.text()).slice(0, 200))
+  }
+  const meta = await metaResp.json()
+
+  const dataResp = await driveRequest('/drive/v3/files/' + fileId + '?alt=media')
+  if (!dataResp.ok) {
+    throw new Error('downloadDriveFile data ' + fileId + ': ' + dataResp.status + ' ' + (await dataResp.text()).slice(0, 200))
+  }
+  const arrayBuffer = await dataResp.arrayBuffer()
+  return {
+    buffer: Buffer.from(arrayBuffer),
+    mimeType: meta.mimeType || 'application/octet-stream',
+    name: meta.name || 'unknown',
+  }
+}
+
+/**
+ * Find the primary solicitation file inside a Drive folder. Heuristic:
+ *   1. Filename match against SF1449|RFP|RFQ|SOLICITATION|combined synopsis
+ *   2. If none, the largest .pdf in the folder
+ *   3. If still none, the first .pdf or .docx in the folder
+ *   4. Otherwise null
+ *
+ * Recursively scans children one level deep — many solicitations land in
+ * a `01_Solicitation_Docs` subfolder.
+ */
+export async function findPrimarySolicitation(folderId: string): Promise<DriveFile | null> {
+  // List files and subfolders in the folder
+  const items = await listFiles(folderId)
+  // Recurse one level into subfolders
+  const all: DriveFile[] = []
+  for (const item of items) {
+    if (item.mimeType === 'application/vnd.google-apps.folder') {
+      const sub = await listFiles(item.id)
+      for (const s of sub) all.push(s)
+    } else {
+      all.push(item)
+    }
+  }
+  // Filter to docs
+  const docs = all.filter(f => f.mimeType !== 'application/vnd.google-apps.folder')
+  if (docs.length === 0) return null
+
+  const PRIMARY_PATTERNS = [
+    /sf[\s_-]?1449/i,
+    /\bsolicitation\b/i,
+    /\bcombined[\s_-]?synopsis\b/i,
+    /\bRFP\b/i,
+    /\bRFQ\b/i,
+    /\bIFB\b/i,
+    /\bPWS\b/i,
+    /\bSOW\b/i,
+  ]
+
+  // 1. Try each pattern in order
+  for (const pat of PRIMARY_PATTERNS) {
+    const hit = docs.find(f => pat.test(f.name))
+    if (hit) return hit
+  }
+
+  // 2. Largest PDF
+  const pdfs = docs.filter(f => f.mimeType === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'))
+  if (pdfs.length > 0) {
+    // Need size — re-fetch with size field
+    let largest: DriveFile | null = null
+    let largestSize = -1
+    for (const p of pdfs) {
+      const r = await driveRequest('/drive/v3/files/' + p.id + '?fields=id,name,mimeType,size')
+      if (r.ok) {
+        const j = await r.json()
+        const size = parseInt(j.size || '0', 10)
+        if (size > largestSize) { largest = p; largestSize = size }
+      }
+    }
+    if (largest) return largest
+  }
+
+  // 3. First doc/pdf
+  const docOrPdf = docs.find(f =>
+    f.mimeType === 'application/pdf' ||
+    f.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    f.name.toLowerCase().endsWith('.pdf') ||
+    f.name.toLowerCase().endsWith('.docx')
+  )
+  return docOrPdf || null
+}
+
+/**
  * List files in a Drive folder.
  */
 export async function listFiles(folderId: string): Promise<DriveFile[]> {
