@@ -241,16 +241,22 @@ export async function shareFolderWithTeam(
   const skipped: string[] = []
   const errors: Array<{ email: string; error: string }> = []
 
-  for (const m of members) {
+  // Parallelize share calls within a folder. Drive's per-user QPS limit is
+  // generous; 7 parallel calls per folder is well within budget.
+  const targets = members.filter(m => {
     const memberEntities = (m.entities || []) as string[]
     if (memberEntities.length > 0 && opts?.entity && !memberEntities.includes(opts.entity)) {
       skipped.push(m.email)
-      continue
+      return false
     }
     if (existing.has(m.email.toLowerCase())) {
       skipped.push(m.email)
-      continue
+      return false
     }
+    return true
+  })
+
+  await Promise.all(targets.map(async (m) => {
     try {
       const perm = await shareDriveFolder(folderId, m.email, (m.role || 'editor') as 'editor' | 'commenter' | 'reader')
       await sb.from('drive_folder_shares').insert({
@@ -263,7 +269,7 @@ export async function shareFolderWithTeam(
     } catch (e) {
       errors.push({ email: m.email, error: (e as Error).message })
     }
-  }
+  }))
 
   return { shared, skipped, errors }
 }

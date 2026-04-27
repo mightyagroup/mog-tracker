@@ -101,8 +101,20 @@ export async function POST(request: Request) {
     folders.push({ source: 'entity_root', folder_id: ec.root_folder_id as string, entity: ec.entity as string, label: ec.entity })
   }
 
+  // Optional pagination so the operation fits in the serverless timeout
+  const url = new URL(request.url)
+  const limit = parseInt(url.searchParams.get('limit') || '0', 10) || folders.length
+  const offset = parseInt(url.searchParams.get('offset') || '0', 10) || 0
+  const slice = folders.slice(offset, offset + limit)
+
   if (dryRun) {
-    return NextResponse.json({ dryRun: true, would_share_folders: folders.length, sample: folders.slice(0, 10) })
+    return NextResponse.json({
+      dryRun: true,
+      total_folders_in_db: folders.length,
+      slice_offset: offset,
+      slice_size: slice.length,
+      sample: slice.slice(0, 10),
+    })
   }
 
   let totalShared = 0
@@ -110,9 +122,27 @@ export async function POST(request: Request) {
   let totalErrors = 0
   const perFolder: Array<Record<string, unknown>> = []
 
-  for (const f of folders) {
-    try {
-      const r = await shareFolderWithTeam(f.folder_id, { entity: f.entity })
+  // Process N folders in parallel. Each folder shares with up to ~7 members
+  // in parallel internally too, so total parallelism is BATCH × 7. Drive's
+  // per-user QPS for permissions API is generous; 8 × 7 = 56 in-flight
+  // requests at any moment is well within budget.
+  const BATCH = 8
+  for (let i = 0; i < slice.length; i += BATCH) {
+    const chunk = slice.slice(i, i + BATCH)
+    const results = await Promise.all(chunk.map(async (f) => {
+      try {
+        const r = await shareFolderWithTeam(f.folder_id, { entity: f.entity })
+        return { f, r, error: null as null | string }
+      } catch (e) {
+        return { f, r: { shared: [] as string[], skipped: [] as string[], errors: [] as Array<{ email: string; error: string }> }, error: (e as Error).message }
+      }
+    }))
+    for (const { f, r, error } of results) {
+      if (error) {
+        totalErrors++
+        perFolder.push({ source: f.source, folder_id: f.folder_id, label: f.label, error })
+        continue
+      }
       totalShared += r.shared.length
       totalSkipped += r.skipped.length
       totalErrors += r.errors.length
@@ -120,22 +150,24 @@ export async function POST(request: Request) {
         source: f.source,
         folder_id: f.folder_id,
         label: f.label,
-        shared: r.shared,
+        shared: r.shared.length,
         skipped_count: r.skipped.length,
-        errors: r.errors,
+        errors: r.errors.length,
       })
-    } catch (e) {
-      totalErrors++
-      perFolder.push({ source: f.source, folder_id: f.folder_id, error: (e as Error).message })
     }
   }
 
   return NextResponse.json({
     ok: true,
-    folders_processed: folders.length,
+    total_folders_in_db: folders.length,
+    folders_processed: slice.length,
+    slice_offset: offset,
+    slice_size: slice.length,
+    has_more: offset + slice.length < folders.length,
+    next_offset: offset + slice.length < folders.length ? offset + slice.length : null,
     total_emails_newly_shared: totalShared,
     total_emails_skipped_already_had_access: totalSkipped,
     total_errors: totalErrors,
-    per_folder: perFolder,
+    per_folder: perFolder.slice(0, 50), // cap response payload
   })
 }

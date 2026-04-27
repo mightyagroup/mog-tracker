@@ -34,9 +34,11 @@ export default function TeamDriveMembersPage() {
   const [newNotes, setNewNotes] = useState('')
   const [adding, setAdding] = useState(false)
 
-  // Backfill state
+  // Backfill state — runs across multiple paginated batches so it fits in
+  // the Vercel serverless timeout regardless of folder count.
   const [backfilling, setBackfilling] = useState(false)
-  const [backfillResult, setBackfillResult] = useState<{ folders_processed?: number; total_emails_newly_shared?: number; total_emails_skipped_already_had_access?: number; total_errors?: number; error?: string } | null>(null)
+  const [backfillProgress, setBackfillProgress] = useState<{ done: number; total: number; shared: number; skipped: number; errors: number } | null>(null)
+  const [backfillResult, setBackfillResult] = useState<{ folders_processed?: number; total_emails_newly_shared?: number; total_emails_skipped_already_had_access?: number; total_errors?: number; total_folders_in_db?: number; error?: string } | null>(null)
 
   async function load() {
     setLoading(true); setError(null)
@@ -86,15 +88,61 @@ export default function TeamDriveMembersPage() {
   }
 
   async function backfill(dryRun: boolean) {
-    setBackfilling(true); setBackfillResult(null); setError(null)
-    const r = await fetch('/api/admin/drive/backfill-shares', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dryRun }),
+    setBackfilling(true)
+    setBackfillResult(null)
+    setBackfillProgress(null)
+    setError(null)
+
+    if (dryRun) {
+      const r = await fetch('/api/admin/drive/backfill-shares', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dryRun: true }),
+      })
+      const j = await r.json()
+      setBackfilling(false)
+      setBackfillResult(j)
+      return
+    }
+
+    // Real run — paginate in batches of 25 folders so each request fits in
+    // the serverless timeout. Loop until has_more is false.
+    const PAGE = 25
+    let offset = 0
+    let totalShared = 0
+    let totalSkipped = 0
+    let totalErrors = 0
+    let totalFolders = 0
+    while (true) {
+      const r = await fetch('/api/admin/drive/backfill-shares?limit=' + PAGE + '&offset=' + offset, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const j = await r.json()
+      if (j.error) {
+        setError(j.error + (j.detail ? ': ' + j.detail : ''))
+        setBackfilling(false)
+        return
+      }
+      totalShared += j.total_emails_newly_shared || 0
+      totalSkipped += j.total_emails_skipped_already_had_access || 0
+      totalErrors += j.total_errors || 0
+      totalFolders = j.total_folders_in_db || totalFolders
+      const done = (j.slice_offset || 0) + (j.slice_size || 0)
+      setBackfillProgress({ done, total: totalFolders, shared: totalShared, skipped: totalSkipped, errors: totalErrors })
+      if (!j.has_more || j.next_offset == null) break
+      offset = j.next_offset
+    }
+
+    setBackfillResult({
+      folders_processed: totalFolders,
+      total_folders_in_db: totalFolders,
+      total_emails_newly_shared: totalShared,
+      total_emails_skipped_already_had_access: totalSkipped,
+      total_errors: totalErrors,
     })
-    const j = await r.json()
     setBackfilling(false)
-    setBackfillResult(j)
   }
 
   const inputCls = "w-full bg-[#111827] border border-[#374151] rounded px-3 py-2 text-sm text-white"
@@ -206,6 +254,11 @@ export default function TeamDriveMembersPage() {
             {backfilling ? 'Backfilling…' : 'Backfill all existing folders'}
           </button>
         </div>
+        {backfilling && backfillProgress && (
+          <div className="mt-4 bg-blue-900/20 border border-blue-800/40 text-blue-200 p-3 rounded text-sm">
+            Processing batch... <b>{backfillProgress.done}</b> / <b>{backfillProgress.total}</b> folders done · shared so far: <b>{backfillProgress.shared}</b> · skipped: <b>{backfillProgress.skipped}</b> · errors: <b>{backfillProgress.errors}</b>
+          </div>
+        )}
         {backfillResult && (
           <div className="mt-4 text-sm">
             {backfillResult.error ? (
