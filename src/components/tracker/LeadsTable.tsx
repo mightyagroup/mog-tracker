@@ -17,6 +17,7 @@ import { FitScoreBadge } from './FitScoreBadge'
 import { LeadDetailPanel } from './LeadDetailPanel'
 import { AddLeadModal } from './AddLeadModal'
 import { ImportCSVModal } from './ImportCSVModal'
+import { BulkSolicitationUploadModal } from './BulkSolicitationUploadModal'
 import { EmptyState } from '@/components/common/EmptyState'
 import { LoadingPage } from '@/components/common/LoadingSpinner'
 import {
@@ -37,7 +38,7 @@ function AmendmentBadge({ count, lastDate }: { count: number; lastDate?: string 
           ? 'bg-red-500/20 text-red-400 animate-pulse'
           : 'bg-amber-500/15 text-amber-400'
       }`}
-      title={`${count} amendment(s) detected${lastDate ? ` â last: ${new Date(lastDate).toLocaleDateString()}` : ''}`}
+      title={`${count} amendment(s) detected${lastDate ? ` — last: ${new Date(lastDate).toLocaleDateString()}` : ''}`}
     >
       <AlertTriangle size={10} />
       {count > 1 ? `${count} amendments` : 'Amended'}
@@ -115,6 +116,7 @@ export function LeadsTable({
   const [selectedLead, setSelectedLead] = useState<GovLead | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
+  const [showBulkUploadModal, setShowBulkUploadModal] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkStatusOpen, setBulkStatusOpen] = useState(false)
   const [merging, setMerging] = useState(false)
@@ -177,7 +179,7 @@ export function LeadsTable({
     setLoading(false)
   }
 
-  // ââ Filtering ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+  // ── Filtering ──────────────────────────────────────────────────────────────
   const filteredLeads = useMemo(() => {
     let result = leads
 
@@ -203,7 +205,7 @@ export function LeadsTable({
     return result
   }, [leads, searchQuery, statusFilters, categoryFilter, setAsideFilter, sourceFilter, regionFilter, showLowFit, entity])
 
-  // ââ Sorting ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+  // ── Sorting ────────────────────────────────────────────────────────────────
   const sortedLeads = useMemo(() => {
     return [...filteredLeads].sort((a, b) => {
       let av: string | number | null = a[sortField] as string | number | null
@@ -227,7 +229,7 @@ export function LeadsTable({
     else { setSortField(field); setSortDir('asc') }
   }
 
-  // ââ Status change (inline or bulk) ââââââââââââââââââââââââââââââââââââââââ
+  // ── Status change (inline or bulk) ────────────────────────────────────────
   async function handleStatusChange(leadId: string, newStatus: LeadStatus) {
     const lead = leads.find(l => l.id === leadId)
     const oldStatus = lead?.status || 'unknown'
@@ -281,7 +283,7 @@ export function LeadsTable({
     setPendingDeleteId(null)
   }
 
-  // ââ Selection âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+  // ── Selection ─────────────────────────────────────────────────────────────
   function toggleSelect(id: string) {
     setSelectedIds(prev => {
       const next = new Set(prev)
@@ -340,23 +342,30 @@ export function LeadsTable({
 
         <div className="flex items-center gap-2 ml-auto">
           <button
-            onClick={() => setShowImportModal(true)}
+            onClick={() => setShowBulkUploadModal(true)}
             className="flex items-center gap-2 px-3 py-2 border border-[#374151] text-gray-400 hover:text-white hover:bg-[#374151] rounded-lg text-sm transition"
+            title="Drop a folder or pick multiple files (RFP + amendments + attachments). Creates one lead and saves files to the entity Drive folder."
           >
             <Upload size={14} />
-            Import
+            Upload Solicitation
+          </button>
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="flex items-center gap-2 px-3 py-2 border border-[#374151] text-gray-400 hover:text-white hover:bg-[#374151] rounded-lg text-sm transition"
+            title="CSV / spreadsheet import — map columns to lead fields"
+          >
+            <Upload size={14} />
+            Import CSV
           </button>
           <button
             onClick={() => {
-              const subset = selectedIds.size > 0 ? sortedLeads.filter(l => selectedIds.has(l.id)) : sortedLeads
-              const count = exportLeadsToCSV(subset, categories)
-              const scope = selectedIds.size > 0 ? 'selected' : 'all filtered'
-              alert('Exported ' + count + ' ' + scope + ' leads to CSV')
+              const count = exportLeadsToCSV(sortedLeads, categories)
+              alert(`Exported ${count} leads to CSV`) // basic user feedback
             }}
             className="flex items-center gap-2 px-3 py-2 border border-[#374151] text-gray-400 hover:text-white hover:bg-[#374151] rounded-lg text-sm transition"
           >
             <Download size={14} />
-            {selectedIds.size > 0 ? ('Export ' + selectedIds.size + ' selected') : 'Export'}
+            Export
           </button>
           <button
             onClick={async () => {
@@ -521,7 +530,7 @@ export function LeadsTable({
                     onClick={() => setSelectedLead(l)}
                     className="block text-xs text-gray-300 hover:text-white transition truncate max-w-full text-left"
                   >
-                    <span className="text-red-400 font-mono mr-1">{l.solicitation_number || 'â'}</span>
+                    <span className="text-red-400 font-mono mr-1">{l.solicitation_number || '—'}</span>
                     {l.title}
                     <span className="text-gray-500 ml-2">
                       ({l.amendment_count} amendment{(l.amendment_count ?? 0) > 1 ? 's' : ''})
@@ -549,7 +558,7 @@ export function LeadsTable({
             className="text-xs text-amber-500 hover:text-amber-400 transition flex items-center gap-1"
           >
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
-            {lowFitCount} low-fit {lowFitCount === 1 ? 'lead' : 'leads'} hidden â Show all
+            {lowFitCount} low-fit {lowFitCount === 1 ? 'lead' : 'leads'} hidden — Show all
           </button>
         )}
         {showLowFit && lowFitCount > 0 && (
@@ -651,7 +660,7 @@ export function LeadsTable({
                         </div>
                       </td>
                       <td className="px-4 py-3 text-gray-300 max-w-[160px]">
-                        <div className="truncate">{lead.agency ?? 'â'}</div>
+                        <div className="truncate">{lead.agency ?? '—'}</div>
                       </td>
                       <td className="px-4 py-3">
                         <DeadlineCountdown deadline={lead.response_deadline} />
@@ -660,7 +669,7 @@ export function LeadsTable({
                         {formatCurrency(lead.estimated_value)}
                       </td>
                       <td className="px-4 py-3 text-gray-400 text-xs max-w-[120px]">
-                        <span className="truncate block">{lead.incumbent_contractor ?? 'â'}</span>
+                        <span className="truncate block">{lead.incumbent_contractor ?? '—'}</span>
                       </td>
                       <td className="px-4 py-3 text-gray-300 font-mono text-xs whitespace-nowrap">
                         {formatCurrency(lead.previous_award_total)}
@@ -677,7 +686,7 @@ export function LeadsTable({
                       <td className="px-4 py-3">
                         {(() => {
                           const p = complianceProgress.get(lead.id)
-                          if (!p || p.total === 0) return <span className="text-gray-600 text-xs">â</span>
+                          if (!p || p.total === 0) return <span className="text-gray-600 text-xs">—</span>
                           const pct = Math.round((p.completed / p.total) * 100)
                           const barColor = pct === 100 ? '#4ADE80' : accentColor
                           return (
@@ -691,13 +700,13 @@ export function LeadsTable({
                         })()}
                       </td>
                       <td className="px-4 py-3">
-                        {cat ? <CategoryBadge name={cat.name} color={cat.color} /> : <span className="text-gray-600 text-xs">â</span>}
+                        {cat ? <CategoryBadge name={cat.name} color={cat.color} /> : <span className="text-gray-600 text-xs">—</span>}
                       </td>
                       <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
                         {SOURCE_LABELS[lead.source]}
                       </td>
                       <td className="px-4 py-3">
-                        {lead.created_at ? <FirstSeenBadge createdAt={lead.created_at} /> : <span className="text-gray-600 text-xs">â</span>}
+                        {lead.created_at ? <FirstSeenBadge createdAt={lead.created_at} /> : <span className="text-gray-600 text-xs">—</span>}
                       </td>
                       <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                         <button
@@ -743,6 +752,15 @@ export function LeadsTable({
         />
       )}
 
+      {/* Bulk solicitation upload modal — drop a folder, one lead created */}
+      {showBulkUploadModal && (
+        <BulkSolicitationUploadModal
+          entity={entity}
+          onClose={() => setShowBulkUploadModal(false)}
+          onCreated={() => { setShowBulkUploadModal(false); fetchData() }}
+        />
+      )}
+
       {/* Add lead modal */}
       {showAddModal && (
         <AddLeadModal
@@ -757,7 +775,7 @@ export function LeadsTable({
   )
 }
 
-// ââ Sortable column header âââââââââââââââââââââââââââââââââââââââââââââââââ
+// ── Sortable column header ─────────────────────────────────────────────────
 function SortHeader({ field, current, dir, onClick, children }: {
   field: SortField; current: SortField; dir: SortDir; onClick: (f: SortField) => void; children: React.ReactNode
 }) {
@@ -778,7 +796,7 @@ function SortHeader({ field, current, dir, onClick, children }: {
   )
 }
 
-// ââ Inline status select âââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ── Inline status select ───────────────────────────────────────────────────
 function InlineStatusSelect({ status, onChange }: { status: LeadStatus; onChange: (s: LeadStatus) => void }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -817,7 +835,7 @@ function InlineStatusSelect({ status, onChange }: { status: LeadStatus; onChange
   )
 }
 
-// ââ Generic filter select ââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ── Generic filter select ──────────────────────────────────────────────────
 function FilterSelect({ label, value, onChange, options }: {
   label: string; value: string; onChange: (v: string) => void
   options: { value: string; label: string }[]
