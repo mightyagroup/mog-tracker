@@ -126,11 +126,19 @@ async function driveRequest(
 }
 
 /**
- * Create a folder in Google Drive.
+ * Create a folder in Google Drive AND auto-share with every active team member.
+ *
+ * Per Ella's directive (2026-04-26): nobody on the MOG team should ever hit
+ * Google's "Request access" wall when clicking a Drive Folder link. The
+ * service account creates the folder; this helper immediately grants Editor
+ * (or whatever role is configured) to every email in `team_drive_members`
+ * whose `entities` array is empty (all entities) or includes the supplied
+ * entity. Failures to share are logged but do not abort folder creation.
  */
 export async function createFolder(
   name: string,
   parentId: string,
+  options?: { entity?: string; skipShare?: boolean },
 ): Promise<DriveFile> {
   const resp = await driveRequest('/drive/v3/files?fields=id,name,mimeType,webViewLink', {
     method: 'POST',
@@ -147,22 +155,140 @@ export async function createFolder(
     throw new Error(`Failed to create folder "${name}": ${resp.status} ${err}`)
   }
 
+  const folder: DriveFile = await resp.json()
+
+  if (!options?.skipShare) {
+    try {
+      await shareFolderWithTeam(folder.id, { entity: options?.entity })
+    } catch (e) {
+      console.error('[google-drive] share-with-team failed for', folder.id, ':', (e as Error).message)
+    }
+  }
+
+  return folder
+}
+
+/**
+ * Grant a role on a Drive folder to a single email. Returns the Drive
+ * permission record. Idempotent: if the email already has access, the API
+ * returns the existing permission.
+ */
+export async function shareDriveFolder(
+  folderId: string,
+  email: string,
+  role: 'editor' | 'commenter' | 'reader' = 'editor',
+  options?: { sendNotificationEmail?: boolean }
+): Promise<{ id: string }> {
+  const sendNotif = options?.sendNotificationEmail ?? false
+  const resp = await driveRequest(
+    `/drive/v3/files/${folderId}/permissions?sendNotificationEmail=${sendNotif}&fields=id,emailAddress,role`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'user',
+        role: role === 'editor' ? 'writer' : role,
+        emailAddress: email,
+      }),
+    }
+  )
+
+  if (!resp.ok) {
+    const err = await resp.text()
+    // 400 with "already exists" is fine — treat as success.
+    if (resp.status === 400 && err.includes('already exists')) {
+      return { id: '(existing)' }
+    }
+    throw new Error(`shareDriveFolder ${folderId} -> ${email}: ${resp.status} ${err.slice(0, 200)}`)
+  }
   return resp.json()
+}
+
+/**
+ * Share a folder with every active team_drive_members row whose entities
+ * filter matches. Logs per-share to drive_folder_shares so future runs
+ * skip already-granted permissions.
+ */
+export async function shareFolderWithTeam(
+  folderId: string,
+  opts?: { entity?: string }
+): Promise<{ shared: string[]; skipped: string[]; errors: Array<{ email: string; error: string }> }> {
+  const { createClient } = await import('@supabase/supabase-js')
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) {
+    return { shared: [], skipped: [], errors: [{ email: '', error: 'Supabase env missing' }] }
+  }
+  const sb = createClient(url, key)
+
+  // Pull active team members.
+  const { data: members, error: mErr } = await sb
+    .from('team_drive_members')
+    .select('email, role, entities, active')
+    .eq('active', true)
+  if (mErr || !members) {
+    return { shared: [], skipped: [], errors: [{ email: '', error: 'team_drive_members lookup: ' + (mErr?.message || 'empty') }] }
+  }
+
+  // Pull existing shares for this folder so we don't double-grant.
+  const { data: existingShares } = await sb
+    .from('drive_folder_shares')
+    .select('email')
+    .eq('folder_id', folderId)
+  const existing = new Set((existingShares || []).map(r => r.email.toLowerCase()))
+
+  const shared: string[] = []
+  const skipped: string[] = []
+  const errors: Array<{ email: string; error: string }> = []
+
+  for (const m of members) {
+    const memberEntities = (m.entities || []) as string[]
+    if (memberEntities.length > 0 && opts?.entity && !memberEntities.includes(opts.entity)) {
+      skipped.push(m.email)
+      continue
+    }
+    if (existing.has(m.email.toLowerCase())) {
+      skipped.push(m.email)
+      continue
+    }
+    try {
+      const perm = await shareDriveFolder(folderId, m.email, (m.role || 'editor') as 'editor' | 'commenter' | 'reader')
+      await sb.from('drive_folder_shares').insert({
+        folder_id: folderId,
+        email: m.email,
+        permission_id: perm.id,
+        role: m.role || 'editor',
+      })
+      shared.push(m.email)
+    } catch (e) {
+      errors.push({ email: m.email, error: (e as Error).message })
+    }
+  }
+
+  return { shared, skipped, errors }
 }
 
 /**
  * Create a nested folder structure under a parent.
  * Returns the top-level folder's ID and webViewLink.
+ *
+ * Children skip the auto-share step — Drive permissions inherit from
+ * parent so sharing the top-level folder once is enough. This keeps us
+ * well under the Drive Permissions API rate limit per bid.
  */
 export async function createFolderStructure(
   structure: FolderStructure,
   parentId: string,
+  options?: { entity?: string; isChild?: boolean },
 ): Promise<{ id: string; webViewLink: string }> {
-  const topFolder = await createFolder(structure.name, parentId)
+  const topFolder = await createFolder(structure.name, parentId, {
+    entity: options?.entity,
+    skipShare: options?.isChild === true,
+  })
 
   if (structure.children) {
     for (const child of structure.children) {
-      await createFolderStructure(child, topFolder.id)
+      await createFolderStructure(child, topFolder.id, { entity: options?.entity, isChild: true })
     }
   }
 
