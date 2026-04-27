@@ -12,7 +12,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import {
   listFilesDetailed,
-  uploadBuffer,
+  uploadBufferDetailed,
   deleteDriveFile,
   createBidPackageFolder,
   findSubfolder,
@@ -167,11 +167,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   for (const f of files) {
     try {
       const buf = Buffer.from(await f.arrayBuffer())
-      const uploaded = await uploadBuffer(buf, f.name, targetId, mimeTypeFromName(f.name, f.type))
-      if (uploaded?.id) {
-        results.push({ name: f.name, ok: true, drive_file_id: uploaded.id, drive_url: uploaded.webViewLink, bytes: buf.length })
+      const r = await uploadBufferDetailed(buf, f.name, targetId, mimeTypeFromName(f.name, f.type))
+      if (r.ok) {
+        results.push({ name: f.name, ok: true, drive_file_id: r.file.id, drive_url: r.file.webViewLink, bytes: buf.length })
       } else {
-        results.push({ name: f.name, ok: false, error: 'upload_returned_null' })
+        results.push({ name: f.name, ok: false, error: r.error, bytes: buf.length })
       }
     } catch (e) {
       results.push({ name: f.name, ok: false, error: (e as Error).message })

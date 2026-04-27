@@ -424,49 +424,74 @@ export async function uploadBuffer(
   parentId: string,
   mimeType: string = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ): Promise<DriveFile | null> {
+  const r = await uploadBufferDetailed(buffer, fileName, parentId, mimeType)
+  return r.ok ? r.file : null
+}
+
+/**
+ * Verbose variant — returns the actual Drive error so callers can surface
+ * something useful in the UI instead of a silent "upload_returned_null".
+ *
+ * Implementation note: the multipart body is built using the resumable
+ * 2-step upload protocol (POST metadata first to get an upload URL, then
+ * PUT the binary). This avoids the multipart-boundary collision risk the
+ * one-shot multipart upload has when binary file content happens to
+ * include the boundary marker.
+ */
+export async function uploadBufferDetailed(
+  buffer: Buffer,
+  fileName: string,
+  parentId: string,
+  mimeType: string = 'application/octet-stream',
+): Promise<{ ok: true; file: DriveFile } | { ok: false; status: number; error: string }> {
   try {
     const token = await getAccessToken()
-    const metadata = JSON.stringify({
-      name: fileName,
-      parents: [parentId],
-    })
 
-    const boundary = '===MOG_BUFFER_BOUNDARY==='
-    const encoder = new TextEncoder()
-    const metadataPart = encoder.encode(
-      `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n`
-    )
-    const filePart = encoder.encode(`--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`)
-    const endPart = encoder.encode(`\r\n--${boundary}--`)
-
-    const body = new Uint8Array(metadataPart.length + filePart.length + buffer.length + endPart.length)
-    body.set(metadataPart, 0)
-    body.set(filePart, metadataPart.length)
-    body.set(new Uint8Array(buffer), metadataPart.length + filePart.length)
-    body.set(endPart, metadataPart.length + filePart.length + buffer.length)
-
-    const resp = await fetch(
-      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,webViewLink',
+    // Step 1: initiate resumable upload — POST metadata, receive upload URL
+    const initResp = await fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,mimeType,webViewLink',
       {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
-          'Content-Type': `multipart/related; boundary=${boundary}`,
+          'Content-Type': 'application/json; charset=UTF-8',
+          'X-Upload-Content-Type': mimeType,
+          'X-Upload-Content-Length': String(buffer.length),
         },
-        body,
+        body: JSON.stringify({ name: fileName, parents: [parentId] }),
       }
     )
 
-    if (!resp.ok) {
-      const err = await resp.text()
-      console.error(`Failed to upload buffer ${fileName}: ${resp.status} ${err}`)
-      return null
+    if (!initResp.ok) {
+      const txt = await initResp.text()
+      return { ok: false, status: initResp.status, error: `init: ${initResp.status} ${txt.slice(0, 300)}` }
+    }
+    const uploadUrl = initResp.headers.get('Location')
+    if (!uploadUrl) {
+      return { ok: false, status: 0, error: 'init: no Location header in response' }
     }
 
-    return resp.json()
+    // Step 2: PUT the binary content. Wrap the Buffer in a Uint8Array
+    // view of the same memory — fetch's BodyInit type accepts Uint8Array
+    // but not the Node Buffer type alias.
+    const bodyView = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
+    const putResp = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': mimeType,
+        'Content-Length': String(buffer.length),
+      },
+      body: bodyView,
+    })
+
+    if (!putResp.ok) {
+      const txt = await putResp.text()
+      return { ok: false, status: putResp.status, error: `put: ${putResp.status} ${txt.slice(0, 300)}` }
+    }
+    const file = await putResp.json()
+    return { ok: true, file }
   } catch (err) {
-    console.error(`Error uploading buffer: ${err}`)
-    return null
+    return { ok: false, status: 0, error: 'exception: ' + (err as Error).message }
   }
 }
 
