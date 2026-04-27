@@ -86,6 +86,28 @@ export async function POST(request: Request) {
       )
     }
 
+    // Auto-add to team_drive_members so this user gets Editor access on every
+    // future Drive folder the system creates. Idempotent via the email unique
+    // constraint. Note: this does NOT backfill existing folders — admin runs
+    // /api/admin/drive/backfill-shares for that.
+    const driveMemberRole = body.role === 'va_readonly' ? 'reader' : 'editor'
+    await serviceSupabase
+      .from('team_drive_members')
+      .upsert({
+        email: body.email.toLowerCase(),
+        display_name: body.displayName || null,
+        role: driveMemberRole,
+        // If admin, leave entities empty (= all). Otherwise scope to assigned entities.
+        entities: body.role === 'admin' ? [] : body.entities,
+        active: true,
+        notes: 'Auto-added on user creation (' + new Date().toISOString().slice(0, 10) + ').',
+      }, { onConflict: 'email' })
+      .select()
+      .maybeSingle()
+      .then(r => {
+        if (r.error) console.warn('[create-user] team_drive_members upsert warning:', r.error.message)
+      })
+
     return NextResponse.json({
       user: {
         id: authData.user.id,
