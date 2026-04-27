@@ -471,17 +471,17 @@ export async function uploadBufferDetailed(
       return { ok: false, status: 0, error: 'init: no Location header in response' }
     }
 
-    // Step 2: PUT the binary content. Wrap the Buffer in a Uint8Array
-    // view of the same memory — fetch's BodyInit type accepts Uint8Array
-    // but not the Node Buffer type alias.
-    const bodyView = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
+    // Step 2: PUT the binary content. Wrap the Buffer in a Blob so the
+    // BodyInit type accepts it across all current TS lib defs (Node 20
+    // typings are stricter about Uint8Array as BodyInit than older ones).
+    const blob = new Blob([new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)], { type: mimeType })
     const putResp = await fetch(uploadUrl, {
       method: 'PUT',
       headers: {
         'Content-Type': mimeType,
         'Content-Length': String(buffer.length),
       },
-      body: bodyView,
+      body: blob,
     })
 
     if (!putResp.ok) {
