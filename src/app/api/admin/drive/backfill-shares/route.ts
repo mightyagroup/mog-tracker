@@ -39,27 +39,57 @@ export async function POST(request: Request) {
   // Collect every folder we have on file.
   const folders: Array<{ source: string; folder_id: string; entity?: string; label?: string }> = []
 
+  // gov_leads: prefer drive_folder_id; fall back to extracting from drive_folder_url
   const { data: leads } = await svc
     .from('gov_leads')
-    .select('id, entity, drive_folder_id, title, solicitation_number')
-    .not('drive_folder_id', 'is', null)
+    .select('id, entity, drive_folder_id, drive_folder_url, title, solicitation_number')
+    .or('drive_folder_id.not.is.null,drive_folder_url.not.is.null')
   for (const l of leads || []) {
+    let folderId = l.drive_folder_id as string | null
+    if (!folderId && l.drive_folder_url) {
+      const m = (l.drive_folder_url as string).match(/folders\/([A-Za-z0-9_-]+)/)
+      if (m) folderId = m[1]
+    }
+    if (!folderId) continue
     folders.push({
       source: 'gov_lead',
-      folder_id: l.drive_folder_id as string,
+      folder_id: folderId,
       entity: l.entity as string,
       label: (l.solicitation_number || l.title || l.id) as string,
     })
   }
 
+  // commercial_leads: same fallback strategy
   const { data: comms } = await svc
     .from('commercial_leads')
-    .select('id, drive_folder_url, organization_name')
-    .not('drive_folder_url', 'is', null)
+    .select('id, drive_folder_id, drive_folder_url, organization_name')
+    .or('drive_folder_id.not.is.null,drive_folder_url.not.is.null')
   for (const c of comms || []) {
-    // Extract folder_id from URL like https://drive.google.com/drive/folders/<id>
-    const m = (c.drive_folder_url as string).match(/folders\/([A-Za-z0-9_-]+)/)
-    if (m) folders.push({ source: 'commercial_lead', folder_id: m[1], label: c.organization_name as string })
+    let folderId = (c as Record<string, unknown>).drive_folder_id as string | null
+    if (!folderId && c.drive_folder_url) {
+      const m = (c.drive_folder_url as string).match(/folders\/([A-Za-z0-9_-]+)/)
+      if (m) folderId = m[1]
+    }
+    if (!folderId) continue
+    folders.push({ source: 'commercial_lead', folder_id: folderId, label: c.organization_name as string })
+  }
+
+  // proposals (Phase 1 added bid_folder_url for the bid-starter folder)
+  const { data: props } = await svc
+    .from('proposals')
+    .select('id, drive_folder_id, drive_folder_url, bid_folder_url, bid_folder_name')
+    .or('drive_folder_id.not.is.null,drive_folder_url.not.is.null,bid_folder_url.not.is.null')
+  for (const p of props || []) {
+    const candidateUrls = [p.drive_folder_url, p.bid_folder_url].filter(Boolean) as string[]
+    let folderId = p.drive_folder_id as string | null
+    if (!folderId) {
+      for (const u of candidateUrls) {
+        const m = u.match(/folders\/([A-Za-z0-9_-]+)/)
+        if (m) { folderId = m[1]; break }
+      }
+    }
+    if (!folderId) continue
+    folders.push({ source: 'proposal', folder_id: folderId, label: (p.bid_folder_name || p.id) as string })
   }
 
   // Entity drive root folders.
